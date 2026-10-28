@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" class="wa-light">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Inline reading regression fixture</title>
+    <style>
+      .reading-prose { white-space: pre-wrap; font: 16px/24px sans-serif; max-width: 1000px; }
+    </style>
+  </head>
+  <body>
+    <h1>Prose whitespace and accessible prefixes</h1>
+    <p class="reading-prose"><span>Check balance at </span><gv-action label="SYNTHETIC_ALIAS"></gv-action><span> /accounts</span></p>
+    <p class="reading-prose"><span>Check balance at </span><gv-action label="SYNTHETIC_ALIAS" hint="Synthetic explanation"></gv-action><span> /accounts</span></p>
+    <p class="reading-prose"><span>Check balance at </span><gv-action size="compact" label="SYNTHETIC_ALIAS"></gv-action><span> /accounts</span></p>
+    <p class="reading-prose"><span>Check balance at </span><gv-action size="compact" label="SYNTHETIC_ALIAS" hint="Synthetic explanation"></gv-action><span> /accounts</span></p>
+    <a href="#synthetic"><span class="sr-only">CLI to GhostVault: </span>http://localhost/example</a>
+    <script type="module">
+      import '@ghostvault/ui-kit/styles.css';
+      import { registerKit } from '@ghostvault/ui-kit';
+      await registerKit({ iconBase: new URL('/icons/', location.origin).href });
+      document.documentElement.dataset.ready = 'true';
+    </script>
+  </body>
+</html>

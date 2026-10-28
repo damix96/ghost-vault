@@ -1,0 +1,22 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "ghostvault-test": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "GhostVault Test (Zen mock)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8766/ghostvault-test/v1",
+        "apiKey": "local-test-only"
+      },
+      "models": {
+        "zen-mock": {
+          "name": "Zen Mock",
+          "limit": {
+            "context": 32000,
+            "output": 4096
+          }
+        }
+      }
+    }
+  }
+}

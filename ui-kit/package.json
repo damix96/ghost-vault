@@ -1,0 +1,54 @@
+{
+  "name": "@ghostvault/ui-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./models": {
+      "types": "./dist/models/editor-session.d.ts",
+      "import": "./dist/models/editor-session.js"
+    },
+    "./clipboard": {
+      "types": "./dist/models/clipboard-task.d.ts",
+      "import": "./dist/models/clipboard-task.js"
+    },
+    "./hint-state": {
+      "types": "./dist/models/hint-state.d.ts",
+      "import": "./dist/models/hint-state.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "dev": "node scripts/assets.mjs public/icons && vite --host 127.0.0.1 --port 5178 --strictPort",
+    "build": "node scripts/build.mjs",
+    "check": "tsc --noEmit && tsc -p tsconfig.examples.json && node scripts/style-check.mjs",
+    "check:docs": "node scripts/docs-check.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "preview": "vite preview --host 127.0.0.1 --port 5178 --strictPort"
+  },
+  "dependencies": {
+    "@awesome.me/webawesome": "3.14.0",
+    "lit": "3.3.3"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "21.0.4",
+    "@tailwindcss/vite": "4.3.3",
+    "lucide-static": "1.61.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3",
+    "vite": "8.3.5"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "license": "UNLICENSED"
+}

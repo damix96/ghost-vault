@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark" class="wa-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>GhostVault · Рабочее пространство</title>
+</head>
+<body class="dashboard" data-mode="simple">
+  <header class="app-header">
+    <a href="#overview" class="app-brand"><span class="app-brand-mark" aria-hidden="true">G</span>GhostVault</a>
+    <nav class="app-navigation" aria-label="Основная навигация">
+      <gv-action id="navOverviewBtn" label="Обзор" tone="primary"></gv-action>
+      <gv-action id="navRulesBtn" label="Правила"></gv-action>
+      <gv-action id="navSecretsBtn" label="Секреты"></gv-action>
+      <gv-action id="navFeedBtn" label="Диагностика"></gv-action>
+    </nav>
+    <div class="app-header-tools"><gv-hint label="Связь со шлюзом" text="Связь этой страницы с GhostVault на вашем компьютере. Результат запроса к модели показан отдельно в разговоре."><span id="gatewayStatus" tabindex="0" class="app-explained" role="status">Соединяемся…</span></gv-hint><gv-action id="exportAllBtn" label="Экспорт" size="compact"></gv-action></div>
+  </header>
+  <div id="startupError" role="alert" hidden></div>
+  <main class="app-content">
+    <div id="viewOverview"></div>
+    <div id="viewRules" hidden></div>
+    <div id="viewSecrets" hidden></div>
+    <div id="viewFeed" hidden></div>
+    <div id="viewInspector" hidden></div>
+  </main>
+  <div id="connectionSettingsHost"></div>
+  <div id="connectionCreateHost"></div>
+  <div id="editorHost"></div>
+  <div id="utilityHost"></div>
+  <gv-feedback id="toast" class="app-toast app-region" hidden></gv-feedback>
+  <script type="module" src="/main.js"></script>
+</body>
+</html>

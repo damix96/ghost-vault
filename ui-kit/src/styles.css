@@ -1,0 +1,22 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "./components";
+@source inline("sr-only");
+:root {
+  --gv-font: system-ui, sans-serif;
+  --gv-space-small: .5rem;
+  --gv-space: 1rem;
+  --gv-space-large: 1.5rem;
+  --gv-radius: .75rem;
+  --gv-surface: var(--wa-color-surface-default);
+  --gv-text: var(--wa-color-text-normal);
+  --gv-muted: var(--wa-color-text-quiet);
+  --gv-border: var(--wa-color-surface-border);
+  --gv-focus: var(--wa-color-focus);
+}
+gv-action, gv-icon { display: inline-block; }
+gv-action { white-space: normal; }
+gv-field, gv-select, gv-value, gv-feedback { display: block; min-width: 0; }
+.gv-value { border: 1px solid var(--gv-border); border-radius: var(--gv-radius); padding: var(--gv-space); overflow-wrap: anywhere; }
+.gv-value pre { font-family: ui-monospace, monospace; line-height: 1.6; }
+.gv-value p, .gv-value [role="status"] { color: var(--gv-muted); }

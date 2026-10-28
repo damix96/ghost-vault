@@ -1,0 +1,58 @@
+{
+  "name": "ghostvault",
+  "version": "0.1.0",
+  "description": "AI-Native Secrets Vault & Zero-Knowledge In-Flight Masking Proxy",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "ghostvault": "dist/index.js"
+  },
+  "scripts": {
+    "build": "npm run build:ui && tsc",
+    "build:ui": "npm --prefix ../ui-kit run build && vite build",
+    "build:ui:stage": "npm --prefix ../ui-kit run build && vite build --outDir ../../.cache/ghostvault-ui-release",
+    "setup": "npm --prefix ../ui-kit ci && npm ci",
+    "check:ui": "node scripts/check-ui.mjs",
+    "smoke:ui": "node scripts/smoke-redesign.mjs",
+    "smoke:first-run": "node scripts/smoke-redesign.mjs",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "demo": "node dist/demo.js",
+    "zen": "node dist/zen.js",
+    "test": "node dist/test-server.js && node dist/test-hooks.js && node dist/test-telemetry.js && node dist/test-mcp.js && node dist/test-sqlite-patterns.js && node dist/test-gateway-regressions.js && node dist/test-protocols.js && node dist/test-protocol-transport.js && node dist/test-protocol-streams.js && node dist/test-native-transport.js && node dist/test-composite-replacements.js && node dist/test-admin-regressions.js",
+    "test:composite": "node dist/test-composite-replacements.js",
+    "test:admin": "node dist/test-admin-regressions.js",
+    "test:e2e": "node dist/e2e-runner.js",
+    "mcp": "node dist/mcp/index.js"
+  },
+  "keywords": [
+    "ai",
+    "proxy",
+    "vault",
+    "security",
+    "zero-knowledge",
+    "mcp",
+    "dlp"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@fastify/cors": "^10.1.0",
+    "@fastify/static": "^10.1.5",
+    "@ghostvault/ui-kit": "file:../ui-kit",
+    "@modelcontextprotocol/sdk": "^1.6.1",
+    "eventsource-parser": "^4.1.1",
+    "fastify": "^5.2.1",
+    "highlight.js": "11.12.0",
+    "ip-regex": "5.0.0",
+    "slugify": "1.6.9",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "playwright-core": "1.63.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vite": "8.3.5"
+  }
+}
