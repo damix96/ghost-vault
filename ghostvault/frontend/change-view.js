@@ -5,7 +5,7 @@ export class ChangeView {
   constructor(display) { this.display = display; }
 
   render = body => {
-    if (body === undefined) return Ui.empty('??? ????????????? ??????? ?? ?????????.');
+    if (body === undefined) return Ui.empty('Это представление запроса не сохранено.');
     const cards = [];
     const visit = (value, path, role = '') => {
       if (typeof value === 'string') {
@@ -19,15 +19,15 @@ export class ChangeView {
           else windows.push({ start, end });
         }
         if (!windows.length) return;
-        const snippets = windows.map(({ start, end }) => '<p class="app-change-text">' + (start ? '?' : '') + this.display.render(value.slice(start, end)) + (end < value.length ? '?' : '') + '</p>').join('');
-        cards.push(`<article class="app-change-card"><header><strong>${escapeHtml(role || '???? ???????')}</strong><code>${escapeHtml(path)}</code></header>${snippets}<button type="button" class="app-text-button" data-context-toggle aria-expanded="false">???????? ????????</button><div class="app-context app-prose" hidden>${this.display.render(value)}</div></article>`);
+        const snippets = windows.map(({ start, end }) => '<p class="app-change-text">' + (start ? '…' : '') + this.display.render(value.slice(start, end)) + (end < value.length ? '…' : '') + '</p>').join('');
+        cards.push(`<article class="app-change-card"><header><strong>${escapeHtml(role || 'Поле запроса')}</strong><code>${escapeHtml(path)}</code></header>${snippets}<button type="button" class="app-text-button" data-context-toggle aria-expanded="false">Показать контекст</button><div class="app-context app-prose" hidden>${this.display.render(value)}</div></article>`);
       } else if (Array.isArray(value)) value.forEach((item, index) => visit(item, path + '[' + index + ']', role));
       else if (value && typeof value === 'object') {
-        const label = { user: '????????????', assistant: '?????????', system: '???????', developer: '???????????', tool: '??????????' }[value.role] || value.role || role;
+        const label = { user: 'Пользователь', assistant: 'Ассистент', system: 'Система', developer: 'Разработчик', tool: 'Инструмент' }[value.role] || value.role || role;
         Object.entries(value).forEach(([key, item]) => visit(item, path ? path + '.' + key : key, label));
       }
     };
     visit(body, 'request');
-    return cards.join('') || Ui.empty('? ??????????? ??????? ??????????? ???. ?????? ????? ???????? ?????.');
+    return cards.join('') || Ui.empty('В сохранённом запросе подстановок нет. Полный текст доступен рядом.');
   };
 }

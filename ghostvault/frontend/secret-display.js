@@ -5,9 +5,9 @@ export class SecretDisplay {
   aliases = new Map();
 
   constructor(secrets = []) {
-    for (const secret of secrets) if (secret.alias && secret.realValue !== undefined) this.aliases.set(secret.alias, { secret, value: secret.realValue, format: 'Обычный текст' });
+    for (const secret of secrets) if (secret.alias && typeof secret.realValue === 'string') this.aliases.set(secret.alias, { secret, value: secret.realValue, format: 'Обычный текст' });
     for (const secret of secrets) {
-      if (!secret.alias || secret.realValue === undefined) continue;
+      if (!secret.alias || typeof secret.realValue !== 'string') continue;
       const seen = new Set([secret.realValue]);
       for (const [format, value] of Object.entries(SecretDisplay.forms(secret.realValue))) {
         if (!value || seen.has(value)) continue;
@@ -41,8 +41,8 @@ export class SecretDisplay {
     for (const token of value.matchAll(this.matcher())) {
       html += escapeHtml(value.slice(offset, token.index));
       const entry = this.aliases.get(token[0]);
-      const hint = entry ? 'Заменяет секрет «' + entry.secret.key + '». Посмотреть значение можно в «Секретах».' : 'Значение для этой подстановки отсутствует в списке секретов.';
-      html += Ui.explain(token[0], hint, entry?.value || '');
+      const hint = entry ? 'Было: ' + (entry.value === '' ? '(пустая строка)' : entry.value) + '\nУшло: ' + token[0] : 'Значение для этой подстановки отсутствует в списке секретов.';
+      html += Ui.explain(token[0], hint, entry?.value || '', entry?.secret.key);
       offset = token.index + token[0].length;
     }
     return html + escapeHtml(value.slice(offset));

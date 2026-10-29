@@ -44,7 +44,7 @@ export class SqlitePatternsTestRunner {
     await this.proxyServer.listen();
 
     const patterns = this.patternEngine.getPatterns();
-    if (patterns.length !== 4) throw new Error('Expected 4 default patterns, got ' + patterns.length);
+    if (patterns.length !== 5) throw new Error('Expected 5 default patterns including any-IP, got ' + patterns.length);
 
     let detectedKey = '';
     this.patternEngine.scanAndAutoDetect(
@@ -72,7 +72,7 @@ export class SqlitePatternsTestRunner {
 
     const patRes = await fetch(baseUrl + '/api/patterns');
     const patList = (await patRes.json()) as any[];
-    if (patList.length !== 4) throw new Error('Dashboard patterns endpoint failed');
+    if (patList.length !== 5) throw new Error('Dashboard patterns endpoint failed');
 
     const createRes = await fetch(baseUrl + '/api/patterns', {
       method: 'POST',

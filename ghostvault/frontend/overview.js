@@ -44,7 +44,12 @@ export class Overview {
     });
     document.getElementById('overviewConversation').addEventListener('click', event => {
       const button = event.target.closest('[data-content-mode]');
-      if (button) { this.contentMode = button.dataset.contentMode; this.renderConversation(); }
+      if (button) {
+        this.contentMode = button.dataset.contentMode;
+        HintLifecycle.hide(document.getElementById('overviewConversation'));
+        this.renderConversation();
+        document.querySelector(`[data-content-mode="${this.contentMode}"]`)?.focus();
+      }
       const context = event.target.closest('[data-context-toggle]');
       if (context) {
         const body = context.nextElementSibling;
@@ -208,7 +213,7 @@ export class Overview {
     if (HintLifecycle.pinned(list)) return;
     const query = this.query.toLowerCase().trim();
     const filtered = this.sessions.filter(session => [session.name, session.id, session.client].some(value => String(value || '').toLowerCase().includes(query)));
-    const html = filtered.length ? OverviewView.sessions(filtered, this.selectedSession) : Ui.empty('Разговоров по этому запросу нет.');
+    const html = filtered.length ? OverviewView.sessions(filtered, this.selectedSession) : Ui.empty('Сессий по этому запросу нет.');
     if (this.sessionsHtml === html) return;
     const focused = list.contains(document.activeElement);
     const top = list.scrollTop;

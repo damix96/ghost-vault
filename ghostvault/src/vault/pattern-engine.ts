@@ -24,10 +24,6 @@ export class PatternEngine {
 
   private initializeDefaultPatterns = (): void => {
     const existing = this.db.getPatterns();
-    const ipPat = existing.find(p => p.id === 'pat_private_ip' || p.name === 'private-ip');
-    if (ipPat && ipPat.pattern !== correctIpPattern) {
-      this.db.upsertPattern({ ...ipPat, pattern: correctIpPattern });
-    }
     if (existing.length > 0) return;
     const defaults: PatternRow[] = [
       {
@@ -68,7 +64,7 @@ export class PatternEngine {
 
   public static isValidRegex = (pat: string): boolean => {
     try {
-      new RegExp(pat);
+      new RegExp(pat, 'gi');
       return true;
     } catch {
       return false;
@@ -93,6 +89,14 @@ export class PatternEngine {
   };
 
   public deletePattern = (id: string): boolean => this.db.deletePattern(id);
+
+  public updatePattern = (id: string, draft: Pick<PatternRow, 'name' | 'pattern' | 'type' | 'enabled'>): PatternRow | null => {
+    const current = this.db.getPatterns().find(row => row.id === id);
+    if (!current || !PatternEngine.isValidRegex(draft.pattern)) return null;
+    const updated = { ...current, ...draft };
+    this.db.upsertPattern(updated);
+    return updated;
+  };
 
   public togglePattern = (id: string): PatternRow | null => this.db.togglePattern(id);
 

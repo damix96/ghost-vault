@@ -106,7 +106,9 @@ export class ProxyServerTestRunner {
     const rootRes = await fetch(baseUrl + '/');
     if (rootRes.status !== 200) throw new Error('Root check failed');
 
-    const appJsRes = await fetch(baseUrl + '/app.js');
+    const appJsPath = dashHtml.match(/<script\b[^>]*\bsrc="([^"]+)"/)?.[1];
+    if (!appJsPath?.startsWith('/assets/')) throw new Error('Dashboard script reference missing');
+    const appJsRes = await fetch(baseUrl + appJsPath);
     if (appJsRes.status !== 200) throw new Error('Static asset check failed');
 
     const addSecretRes = await fetch(baseUrl + '/api/vault/secret', {

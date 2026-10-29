@@ -141,7 +141,7 @@ export class Connections {
 
   remove = async id => {
     const route = this.routes.find(item => item.id === id);
-    if (!await this.app.utilities.confirm('Удалить соединение «' + route.name + '»?', 'Его локальный адрес перестанет принимать запросы. Правила, секреты и разговоры сохранятся.')) return;
+    if (!await this.app.utilities.confirm('Удалить соединение «' + route.name + '»?', 'Его локальный адрес перестанет принимать запросы. Правила, секреты и сессии сохранятся.')) return;
     await this.api.deleteRoute(id);
     const visible = this.workspace.visible.filter(value => value !== id);
     await this.persist({ visible, selected: this.workspace.selected === id ? visible[0] || '' : this.workspace.selected });
@@ -154,7 +154,7 @@ export class Connections {
   copy = async (id, field) => {
     const route = this.editor.isOpen() && this.editor.route.id === id ? this.editor.route : this.routes.find(item => item.id === id);
     if (!route) return;
-    const values = { incoming: ClientInstructions.incoming(route), outgoing: route.upstreamUrl, command: ClientInstructions.command(route), environment: ClientInstructions.environment(route), launch: ClientInstructions.launch(route), nativeConfig: ClientInstructions.nativeConfig(route), pluginConfig: ClientInstructions.pluginConfig(route) };
+    const values = { incoming: ClientInstructions.incoming(route), outgoing: route.upstreamUrl, command: ClientInstructions.command(route), environment: ClientInstructions.environment(route), launch: ClientInstructions.launch(route), nativeConfig: ClientInstructions.nativeConfig(route), customConfig: ClientInstructions.customConfig(route), pluginConfig: ClientInstructions.pluginConfig(route) };
     if (!values[field]) return;
     const source = this.editor.isOpen() ? this.editor.source : null;
     const copied = await this.app.copyText(values[field], !source);

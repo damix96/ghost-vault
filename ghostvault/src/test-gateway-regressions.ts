@@ -98,6 +98,9 @@ export class GatewayRegressionTests {
       const favicon = await server.getApp().inject({ method: 'GET', url: '/favicon.ico' });
       assert.equal(favicon.statusCode, 404);
       assert.equal(this.db.getTransactions().length, transactionCount);
+      const claimedPreset = registry.createCustomRoute({ name: 'claimed', prefix: 'openai', upstreamUrl: 'http://127.0.0.1:9098' });
+      assert.equal(claimedPreset.id, 'openai');
+      assert.equal(claimedPreset.isCustom, true);
       assert.throws(() => registry.createCustomRoute({ name: 'collision', prefix: 'openai', upstreamUrl: 'http://127.0.0.1:9098' }));
       assert.throws(() => registry.createCustomRoute({ name: 'reserved', prefix: 'api', upstreamUrl: 'http://127.0.0.1:9098' }));
       const encodedAlias = this.vault.maskOutboundText(Buffer.from(this.value).toString('base64'));

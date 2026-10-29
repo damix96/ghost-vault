@@ -27,7 +27,7 @@ export class UtilityDialogs {
     if (dialog.open) return;
     const groups = [['connections', 'Соединения'], ['patterns', 'Правила'], ['secrets', 'Секреты'], ['hooks', 'Хуки'], ['proxy,settings', 'Настройки шлюза и интерфейса']];
     const choices = groups.map(([value, label]) => '<label class="app-export-choice"><input type="checkbox" name="export-group" value="' + value + '" checked><span>' + label + '</span></label>').join('');
-    dialog.innerHTML = '<gv-stack><fieldset class="app-export-choices"><legend>Что включить в файл</legend>' + choices + '</fieldset><p class="app-help">Выбранные разделы сохранятся в одном JSON. Секреты экспортируются с настоящими значениями. История разговоров в файл не входит.</p>' + Ui.feedback('exportError') + '<div class="app-form-actions"><gv-action label="Закрыть" data-export-close></gv-action><gv-action label="Скачать JSON" tone="primary" data-download></gv-action></div></gv-stack>';
+    dialog.innerHTML = '<gv-stack><fieldset class="app-export-choices"><legend>Что включить в файл</legend>' + choices + '</fieldset><p class="app-help">Выбранные разделы сохранятся в одном JSON. Секреты экспортируются с настоящими значениями. История сессий в файл не входит.</p>' + Ui.feedback('exportError') + '<div class="app-form-actions"><gv-action label="Закрыть" data-export-close></gv-action><gv-action label="Скачать JSON" tone="primary" data-download></gv-action></div></gv-stack>';
     const selected = () => [...dialog.querySelectorAll('input[name="export-group"]:checked')].flatMap(input => input.value.split(','));
     const update = () => { dialog.querySelector('[data-download]').disabled = selected().length === 0; Ui.error('exportError', ''); };
     const handler = async event => {

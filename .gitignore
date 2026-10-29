@@ -3,3 +3,14 @@ dist/
 *.log
 .cache/
 ghostvault/public/
+.codex/
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+secret-test.txt
+e2e-evidence.json

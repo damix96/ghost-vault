@@ -1,0 +1,39 @@
+import { FastifyInstance } from 'fastify';
+import { Worker } from 'node:worker_threads';
+import { z } from 'zod';
+import { VaultDatabase } from '../vault/sqlite-db.js';
+
+const input = z.object({ pattern: z.string().min(1).max(16384), anyIp: z.boolean().default(false), matchOffset: z.number().int().min(0).default(0), offset: z.number().int().min(0).default(0), snapshot: z.string().datetime() });
+
+export class RulePreviewApi {
+  constructor(private app: FastifyInstance, private db: VaultDatabase) {}
+
+  register = () => this.app.post('/api/pattern-preview', async (req, reply) => {
+    const parsed = input.safeParse(req.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Укажите выражение до 16384 символов и параметры проверки.' });
+    const { pattern, anyIp, offset, matchOffset, snapshot } = parsed.data;
+    if (/^\/.*\/[a-z]*$/s.test(pattern)) return reply.status(400).send({ error: 'Введите выражение без /…/ и флагов.' });
+    const page = this.db.getRulePreviewPage(offset, snapshot);
+    const worker = new Worker(new URL('./rule-preview-worker.js', import.meta.url), { workerData: { pattern, anyIp, matchOffset, rows: page.rows }, resourceLimits: { maxOldGenerationSizeMb: 48 } });
+    let cancel = () => {};
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
+        cancel = () => reject(new Error('Проверка отменена.'));
+        reply.raw.once('close', cancel);
+        timer = setTimeout(() => reject(new Error('Проверка остановлена: выражение выполняется дольше 1 секунды. Упростите его.')), 1000);
+        worker.once('message', resolve);
+        worker.once('error', reject);
+        worker.once('exit', code => { if (code !== 0) reject(new Error('Проверка остановлена из-за ограничения ресурсов.')); });
+      });
+      if (result.error) return reply.status(400).send({ error: result.error });
+      return { ...result, next: result.more ? offset : page.next, matchOffset: result.more ? matchOffset + 20 : 0, total: page.total, scanned: page.rows.length };
+    } catch (error) {
+      return reply.status(408).send({ error: error instanceof Error ? error.message : 'Проверка не завершена.' });
+    } finally {
+      clearTimeout(timer);
+      reply.raw.removeListener('close', cancel);
+      void worker.terminate();
+    }
+  });
+}

@@ -2,6 +2,8 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { VaultStore } from '../vault/store.js';
 import { PatternEngine } from '../vault/pattern-engine.js';
+import { PatternEditorApi } from './pattern-editor-api.js';
+import { RulePreviewApi } from './rule-preview-api.js';
 import { TransactionRow } from '../vault/sqlite-db.js';
 import { HookManager } from '../hooks/manager.js';
 import { EventBroadcaster } from '../telemetry/event-broadcaster.js';
@@ -159,7 +161,7 @@ export class DashboardApi {
       this.vault.getDatabase().getSessions().map(s => ({
         id: s.id,
         name: s.id,
-        endpoints: this.safeJson(s.endpoints, []),
+        endpoints: this.safeJson(s.endpoints || '[]', []),
         client: s.client,
         firstSeen: s.first_seen,
         lastSeen: s.last_seen,
@@ -190,6 +192,8 @@ export class DashboardApi {
     });
 
     this.app.get('/api/patterns', async () => this.patternEngine.getPatterns());
+    new PatternEditorApi(this.app, this.patternEngine).register();
+    new RulePreviewApi(this.app, this.vault.getDatabase()).register();
 
     this.app.post('/api/patterns', async (req: FastifyRequest<{ Body: { name?: string; pattern?: string; type?: string } }>, reply: FastifyReply) => {
       const body = req.body || {};

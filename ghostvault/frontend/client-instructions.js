@@ -37,7 +37,7 @@ export class ClientInstructions {
     if (kind === 'openai') return OpenAiInstructionsView.render(route);
     if (kind === 'zen') return ZenInstructionsView.render(route);
     if (kind === 'go') return '<p>Инструкция для OpenCode Go пока недоступна.</p>';
-    return Ui.code(ClientInstructions.incoming(route)) + Ui.button('Скопировать адрес', 'route-copy', [route.id, 'incoming']);
+    return Ui.code(ClientInstructions.incoming(route)) + Ui.button('Скопировать адрес', 'route-copy', [route.id, 'incoming']) + '<h3>Подключить в OpenCode 2</h3>' + ZenInstructionsView.locations() + ZenInstructionsView.custom(route) + '<p class="app-help">Ключ берётся из переменной <code>MYOC2_API_KEY</code>.</p>' + Ui.code('MYOC2_API_KEY=ваш_ключ');
   };
 
   static copyMessage = () => 'Скопировано.';

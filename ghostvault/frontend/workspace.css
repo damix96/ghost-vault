@@ -90,6 +90,24 @@ select option { background: var(--gv-panel); }
 .app-rule-examples { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .65rem; }
 .app-rule-examples code { background: #181a20; color: #a7b9dc; padding: .2rem .5rem; border-radius: .3rem; font-size: .75rem; overflow-wrap: anywhere; }
 .app-rule-expression { margin: .7rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: #b5caff; font-size: .8rem; }
+.app-rule-expression { padding: .85rem; background: #181a20; border: 1px solid var(--gv-border); border-radius: .45rem; max-height: 15rem; overflow: auto; }
+.app-rule-editor { display: grid; gap: .85rem; }
+.app-rule-editor label:not(.app-switch) { display: grid; gap: .4rem; font-size: .85rem; }
+.app-regex-input { width: 100%; resize: vertical; min-height: 10rem; padding: .85rem; background: #181a20; border: 1px solid #444c5c; border-radius: .5rem; color: #b5caff; font: .85rem/1.7 Consolas, monospace; }
+.app-regex-input:focus-visible { outline: 2px solid var(--gv-focus); outline-offset: 2px; }
+.app-save-button { background: #3f6bc1; color: #f2f5fc; border: 1px solid #597caf; border-radius: .5rem; padding: .55rem 1rem; cursor: pointer; }
+.app-save-button:disabled { opacity: .5; cursor: default; }
+#ruleEditorDialog, #patternModal { --gv-dialog-width: 76rem; }
+#ruleEditorForm, #patternForm { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 1.5rem; align-items: start; }
+#ruleEditorForm > *, #patternForm > * { min-width: 0; }
+.app-rule-preview h3 { margin: 0 0 .75rem; font-size: .9rem; font-weight: 550; }
+.app-preview-status { font-size: .8rem; color: #afc3e8; }
+.app-preview-results { display: grid; gap: .65rem; max-height: 65vh; overflow: auto; }
+.app-preview-match { padding: .85rem; background: #181a20; border: 1px solid var(--gv-border); border-radius: .5rem; min-width: 0; }
+.app-preview-match header { display: flex; gap: .5rem; flex-wrap: wrap; font-size: .8rem; }
+.app-preview-match code, .app-preview-match .app-help { overflow-wrap: anywhere; font-size: .72rem; }
+.app-preview-match mark { background: #344c6f; color: #dce9ff; border-radius: .2rem; padding: .1rem .15rem; }
+@media(max-width: 800px) { #ruleEditorForm, #patternForm { grid-template-columns: minmax(0,1fr); } .app-preview-results { max-height: 40vh; } }
 .app-rule[data-enabled="false"] { background: transparent; }
 .app-export-choices { border: 0; padding: 0; margin: 0; display: grid; gap: .5rem; }
 .app-export-choices legend { padding: 0 0 .75rem; font-weight: 500; }
@@ -166,6 +184,10 @@ select { background: var(--gv-panel); color: var(--gv-text); border: 1px solid v
 .app-code .app-explained { color: inherit; }
 
 .app-search { display: block; width: 100%; min-width: 0; height: 2.6rem; padding: .65rem .85rem; border: 1px solid #444c5c; border-radius: .6rem; background: #1d212a; color: var(--gv-text); outline: none; box-shadow: none; }
+.app-secret-control [data-secret-key] { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.app-secret-card { transition: background-color .3s, border-color .3s, box-shadow .3s; }
+.app-secret-card.app-secret-target { background: #26364c; border-color: #708caf; box-shadow: inset 3px 0 #8aabfa; }
+.app-secret-card:focus { outline: none; }
 .app-search::placeholder { color: #8e98aa; }
 .app-search:hover { border-color: #64718a; }
 .app-search:focus-visible { border-color: #8aabfa; outline: 2px solid #8aabfa; outline-offset: 2px; }
@@ -213,3 +235,5 @@ select { background: var(--gv-panel); color: var(--gv-text); border: 1px solid v
 wa-input::part(base), wa-textarea::part(base) { background: #1d212a; border: 1px solid #444c5c; border-radius: .6rem; box-shadow: none; }
 wa-input:focus-within::part(base), wa-textarea:focus-within::part(base) { border-color: #8aabfa; outline: 2px solid #8aabfa; outline-offset: 2px; }
 @media(max-width: 700px) { .app-session-layout { grid-template-columns: minmax(0,1fr); } #overviewSessions { position: static; max-height: 18rem; } .app-substitution-pair { grid-template-columns: minmax(0,1fr); gap: .5rem; } .app-secret-card { padding: .85rem; } }
+
+.app-preview-context .app-code { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }

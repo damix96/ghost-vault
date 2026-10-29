@@ -27,6 +27,7 @@ export class DashboardActions {
       ['route-delete', id => app.connections.remove(id)],
       ['route-copy', (id, field) => app.connections.copy(id, field)],
       ['rule-create', () => app.modals.togglePatternModal(true)],
+      ['rule-edit', id => app.ruleEditor.open(id)],
     ]);
   }
 

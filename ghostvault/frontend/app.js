@@ -11,6 +11,9 @@ import { Screens } from './screens.js';
 import { ClipboardTask } from '@ghostvault/ui-kit/clipboard';
 import { HintLifecycle } from './hint-lifecycle.js';
 import { DisclosureState } from './disclosure-state.js';
+import { RuleEditor } from './rule-editor.js';
+import { RelativeTime } from './relative-time.js';
+import { SecretNavigation } from './secret-navigation.js';
 
 export class DashboardApp {
   api = new ApiClient();
@@ -27,6 +30,7 @@ export class DashboardApp {
   manualSecrets = [];
   autoSecrets = [];
   patterns = [];
+  ruleEditor = new RuleEditor(this);
   searchQuery = '';
   rulesQuery = '';
   vaultSignature = '';
@@ -35,9 +39,11 @@ export class DashboardApp {
 
   init = async () => {
     window.app = this;
+    new SecretNavigation(this).init();
     new DashboardActions(this).bind();
     Screens.mount();
     document.getElementById('viewRules').innerHTML = RulesView.shell();
+    this.ruleEditor.init();
     this.bindEvents();
     this.modals.init();
     this.overview.init();
@@ -85,6 +91,7 @@ export class DashboardApp {
 
 
   refresh = async () => {
+    RelativeTime.update();
     if (this.refreshing) return;
     this.refreshing = true;
     try { await Promise.allSettled([this.fetchData(), this.overview.refresh()]); }
@@ -108,6 +115,7 @@ export class DashboardApp {
   fetchPatterns = async () => {
     try {
       this.patterns = await this.api.getPatterns();
+      this.ruleEditor.observe(this.patterns);
       this.renderRules();
     } catch (error) { this.showToast('Не удалось загрузить правила: ' + error.message); }
   };

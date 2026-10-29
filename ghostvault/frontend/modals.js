@@ -3,6 +3,7 @@ import { EditorViews } from './editor-views.js';
 import { HintLifecycle } from './hint-lifecycle.js';
 import { FormFeedback } from './form-feedback.js';
 import { EditorValidation } from './editor-validation.js';
+import { RulePreview } from './rule-preview.js';
 
 export class ModalManager {
   editingKey = null;
@@ -16,6 +17,10 @@ export class ModalManager {
 
   init = () => {
     document.getElementById('editorHost').innerHTML = EditorViews.shell();
+    const preview = document.createElement('aside');
+    document.getElementById('patternForm').append(preview);
+    this.rulePreview = new RulePreview(this.api, preview, () => ({ pattern: Ui.read('patternRegexInput'), anyIp: false }));
+    document.getElementById('patternRegexInput').addEventListener('gv-input', this.rulePreview.schedule);
     document.getElementById('openAddModalBtn').addEventListener('gv-activate', () => this.openSecretModal());
     document.getElementById('cancelModalBtn').addEventListener('gv-activate', this.closeSecretModal);
     document.getElementById('cancelPatternModalBtn').addEventListener('gv-activate', () => this.togglePatternModal(false));
@@ -34,7 +39,7 @@ export class ModalManager {
       this.saved = false;
       this.editingKey = null;
     });
-    document.getElementById('patternModal').addEventListener('gv-close', event => HintLifecycle.hide(event.currentTarget));
+    document.getElementById('patternModal').addEventListener('gv-close', event => { this.rulePreview.cancel(); HintLifecycle.hide(event.currentTarget); });
   };
 
   openSecretModal = async (secretKey = null) => {
@@ -67,6 +72,7 @@ export class ModalManager {
       Ui.error('patternFormError', '');
       document.getElementById('patternForm').querySelectorAll('gv-field').forEach(field => { field.error = ''; });
       dialog.show(document.activeElement, document.querySelector('#viewRules gv-page'));
+      this.rulePreview.schedule();
     } else if (!this.pending.has('pattern')) dialog.hide();
   };
 

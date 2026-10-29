@@ -13,7 +13,8 @@ export class LatestCallView {
     const viewer = new PayloadView(display);
     const sent = PayloadView.parse(step.maskedPrompt);
     const body = mode === 'original' ? PayloadView.parse(step.request?.body) : sent;
-    const request = body === undefined ? Ui.empty('Это представление запроса не сохранено.') : viewer.render(body, 'Запрос', 'request') + viewer.saved(body, 'request');
+    const request = contentMode === 'changes' ? new ChangeView(display).render(sent) : body === undefined ? Ui.empty('Это представление запроса не сохранено.') : contentMode === 'json' ? viewer.json(body) : viewer.render(body, 'Запрос', 'request');
+    const modes = '<div class="app-view-modes" role="group" aria-label="Объём запроса">' + [['changes', 'Места замен'], ['full', 'Полный текст'], ['json', 'JSON']].map(([id, label]) => `<button type="button" data-content-mode="${id}" aria-pressed="${contentMode === id}">${label}</button>`).join('') + '</div>';
     const response = viewer.render(step.response?.body, 'Ответ', 'response') + (step.response?.body !== undefined ? viewer.saved(step.response.body, 'response') : '');
     return `<gv-stack class="app-latest-call" gap="large">${CallHeaderView.render(step, mode, contentMode)}${CallSecretsView.render(step, sent, display)}<section class="app-request-payload">${modes}${request}</section><section class="app-final-response"><h3>${Ui.explain('Ответ приложению', 'Ответ модели после восстановления секретов: вместо $${<DB_HOST>} снова стоит настоящий адрес.')}</h3>${response}</section></gv-stack>`;
   };

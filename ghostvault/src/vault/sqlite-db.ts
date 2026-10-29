@@ -132,6 +132,7 @@ export class VaultDatabase {
         target_provider TEXT,
         target_url TEXT
       );
+      CREATE INDEX IF NOT EXISTS transactions_session_time ON transactions(session_id, timestamp);
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT
@@ -256,6 +257,13 @@ export class VaultDatabase {
 
   public getTransactions = (limit: number = 50): TransactionRow[] =>
     this.db.prepare('SELECT * FROM transactions ORDER BY timestamp DESC LIMIT ?').all(limit) as unknown as TransactionRow[];
+
+  public getRulePreviewPage = (offset: number, snapshot: string) => {
+    const source = 'FROM sessions s JOIN transactions t ON t.id = (SELECT id FROM transactions WHERE session_id = s.id AND timestamp <= ? ORDER BY timestamp DESC, id DESC LIMIT 1)';
+    const total = (this.db.prepare('SELECT COUNT(*) AS count ' + source).get(snapshot) as { count: number }).count;
+    const rows = this.db.prepare('SELECT t.id, t.session_id, t.client, t.url, t.timestamp, t.prompt_text AS text ' + source + ' ORDER BY s.id LIMIT 1 OFFSET ?').all(snapshot, offset);
+    return { total, rows, next: offset + rows.length };
+  };
 
   public getTransactionsBySession = (sessionId: string): TransactionRow[] =>
     this.db.prepare('SELECT * FROM transactions WHERE session_id = ? ORDER BY timestamp DESC').all(sessionId) as unknown as TransactionRow[];

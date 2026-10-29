@@ -4,7 +4,7 @@ import { GvElement } from '../element.js';
 
 export class GvDialog extends GvElement {
   static properties = { heading: {}, open: { type: Boolean, reflect: true }, closeDisabled: { type: Boolean, attribute: 'close-disabled', reflect: true } };
-  static styles = css`:host{display:contents}wa-dialog{--width:38rem}::slotted(form){display:block;min-width:0}`;
+  static styles = css`:host{display:contents}wa-dialog{--width:var(--gv-dialog-width,38rem)}::slotted(form){display:block;min-width:0}`;
   heading = '';
   open = false;
   closeDisabled = false;

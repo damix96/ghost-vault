@@ -22,7 +22,7 @@ class RedesignSmoke {
     const display = new SecretDisplay([{ key, alias, realValue: 'synthetic secret' }]);
     assert.equal(display.counts({ content: alias + ' ' + alias }).get(key), 2);
     assert.match(display.render(alias), /data-hint-only/);
-    assert.doesNotMatch(display.render(alias), /token-copy|synthetic secret/);
+    assert.match(display.render(alias), /synthetic secret/);
     await this.host.init();
     this.base = await this.host.app.listen({ port: 0, host: '127.0.0.1' });
     this.browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe' });
@@ -135,9 +135,7 @@ class RedesignSmoke {
     const legacy = await this.api('/api/sessions/saved-conversation');
     assert.equal(legacy[0].maskedPrompt, undefined);
     assert.equal(legacy[0].targetProvider ?? null, null);
-    await this.click('#navOverviewBtn');
-    await this.page.evaluate(() => window.app.overview.refresh());
-    assert.match(await this.page.locator('#overviewConversation').innerText(), /представление запроса не сохранено/);
+    await this.isolation(firstId, secondId, alias, key);
     await this.click('#navSecretsBtn');
     await this.page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await this.page.locator('#manualVaultTable').evaluate(node => node.scrollWidth <= node.clientWidth + 1), true);
@@ -154,6 +152,77 @@ class RedesignSmoke {
     assert.deepEqual(this.errors, []);
     assert.deepEqual(this.external, []);
     console.log('PASS: isolated redesign workflows, drafts, lowercase/unrestricted tokens, clipboard, navigation, responsive table, export and truthful events');
+  };
+
+  isolation = async (firstId, secondId, alias, key) => {
+    await this.api('/api/routes/' + secondId, { upstreamUrl: 'https://api.openai.com/v1' });
+    const save = (id, session, url, body, timestamp) => {
+      this.host.database.upsertSession(session, 'Fixture');
+      this.host.database.saveTransaction({ id, session_id: session, client: 'Fixture', method: 'POST', url, status: 200, latency_ms: 1, prompt_text: JSON.stringify(body), masked_prompt: JSON.stringify(body), model_response: 'safe reply', intercepted_secrets: JSON.stringify([{ key, alias, realValue: 'synthetic secret' }]), timestamp, target_url: 'https://api.openai.com/v1/chat/completions' });
+    };
+    const stamp = new Date().toISOString();
+    save('second-call', 'second-conversation', '/alpha-team/chat/completions', { messages: [{ role: 'user', content: 'SECOND_ONLY ' + alias }] }, stamp);
+    save('unknown-call', 'unknown-conversation', '/retired/chat/completions', 'UNKNOWN_ONLY', stamp);
+    save('shared-a', 'shared-conversation', '/openai/chat/completions', 'SHARED_FIRST ' + alias, stamp);
+    save('shared-b', 'shared-conversation', '/alpha-team/chat/completions', 'SHARED_SECOND ' + alias, new Date(Date.now() + 1000).toISOString());
+    await this.click('#navOverviewBtn');
+    await this.page.evaluate(() => window.app.overview.refresh());
+    await this.page.waitForFunction(() => window.app.overview.sessions.some(s => s.id === 'second-conversation'));
+    assert.doesNotMatch(await this.page.locator('#overviewSessionList').innerText(), /saved-conversation|unknown-conversation/);
+    await this.page.locator('[data-session-id="second-conversation"]').click();
+    await this.page.waitForFunction(() => document.getElementById('overviewConversation').textContent.includes('SECOND_ONLY'));
+    assert.equal(await this.page.locator('.app-change-card').count(), 1);
+    assert.match(await this.page.locator('.app-change-card header').innerText(), /Пользователь/);
+    const hint = this.page.locator('.app-change-text gv-hint').first();
+    await hint.locator('[data-hint-only]').click();
+    assert.match(await hint.locator('.text').innerText(), /synthetic secret/);
+    await hint.getByRole('button', { name: 'Копировать значение', exact: true }).click();
+    assert.equal(await this.page.evaluate(() => navigator.clipboard.readText()), 'synthetic secret');
+    await this.page.keyboard.press('Escape');
+    await this.page.locator('[data-context-toggle]').click();
+    assert.equal(await this.page.locator('.app-context').isVisible(), true);
+    await this.page.locator('[data-content-mode="json"]').click();
+    assert.ok(await this.page.locator('.app-request-payload .hljs-attr').count());
+    await this.page.locator('[data-content-mode="changes"]').click();
+    await this.page.evaluate(id => window.app.connections.select(id), firstId);
+    await this.page.waitForFunction(() => window.app.overview.sessions.some(s => s.id === 'saved-conversation'));
+    assert.doesNotMatch(await this.page.locator('#overviewSessionList').innerText(), /second-conversation|unknown-conversation/);
+    await this.page.locator('[data-session-id="shared-conversation"]').click();
+    await this.page.waitForFunction(() => document.getElementById('overviewConversation').textContent.includes('SHARED_FIRST'));
+    assert.doesNotMatch(await this.page.locator('#overviewConversation').innerText(), /SHARED_SECOND|SECOND_ONLY/);
+    await this.page.locator('[data-session-id="saved-conversation"]').click();
+    await this.page.waitForFunction(() => document.getElementById('overviewConversation').textContent.includes('представление запроса не сохранено'));
+    await this.page.evaluate(() => {
+      const overview = window.app.overview;
+      const original = overview.api.getSession;
+      overview.api.getSession = async id => {
+        overview.api.getSession = original;
+        const rows = await original(id);
+        await new Promise(resolve => { window.releaseSession = resolve; });
+        return rows;
+      };
+      overview.refresh();
+    });
+    await this.page.waitForFunction(() => window.releaseSession);
+    await this.page.evaluate(id => window.app.connections.select(id), secondId);
+    await this.page.evaluate(() => window.releaseSession());
+    await this.page.waitForFunction(() => !window.app.overview.refreshing && window.app.overview.sessions.some(s => s.id === 'second-conversation'));
+    assert.doesNotMatch(await this.page.locator('#overviewConversation').innerText(), /original-only|SHARED_FIRST/);
+    await this.page.evaluate(() => {
+      const overview = window.app.overview;
+      overview.handleEvent({ type: 'request_started', details: { transactionId: 'foreign', endpoint: '/openai/chat/completions', sessionId: overview.selectedSession } });
+      overview.handleEvent({ type: 'stream_progress', details: { transactionId: 'foreign', sessionId: overview.selectedSession, text: 'FOREIGN_STREAM' } });
+    });
+    assert.equal(await this.page.locator('#overviewStream').isVisible(), false);
+    const empty = await this.api('/api/routes', { name: 'empty-fixture', prefix: 'empty-fixture', upstreamUrl: 'https://api.openai.com/v1' });
+    await this.page.evaluate(async id => {
+      const connections = window.app.connections;
+      await connections.persist({ visible: [...connections.workspace.visible, id], selected: id });
+    }, empty.id);
+    await this.page.waitForFunction(() => !window.app.overview.refreshing);
+    assert.equal(await this.page.locator('#overviewSessions').isVisible(), false);
+    assert.doesNotMatch(await this.page.locator('#overviewConversation').innerText(), /SHARED|SECOND_ONLY|original-only/);
+    console.log('PASS: isolated routes, shared session, equal upstreams, unknown history, delayed response, foreign SSE, empty connection, snippets, hint copy and JSON');
   };
 
   close = async () => { await this.browser?.close(); await this.host.close(); };
