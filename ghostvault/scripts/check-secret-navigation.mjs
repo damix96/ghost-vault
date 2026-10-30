@@ -36,14 +36,15 @@ class SecretNavigationCheck {
     await token.click();
     const hint = this.page.locator('.app-change-text gv-hint').first();
     assert.equal(await hint.evaluate(node => node.readState().pinned), true);
-    await hint.getByRole('button', { name: 'Копировать значение', exact: true }).click();
+    await hint.getByRole('button', { name: 'Копировать исходное', exact: true }).click();
     assert.equal(await this.page.evaluate(() => navigator.clipboard.readText()), 'value / encoded');
     await this.page.keyboard.press('Escape');
     await this.page.evaluate(() => { window.app.searchQuery = 'NO_MATCH'; document.getElementById('searchInput').value = 'NO_MATCH'; });
     await token.click({ modifiers: ['Control'] });
     await this.destination(this.key, 'manual');
     assert.equal(await this.page.locator('#searchInput').inputValue(), '');
-    await this.show('$${<' + this.key + '__GV_URL>}');
+    const encodedAlias = await this.page.evaluate(key => window.app.manualSecrets.find(secret => secret.key === key).representations.find(item => item.value === encodeURIComponent('value / encoded')).alias, this.key);
+    await this.show(encodedAlias);
     const encoded = this.page.locator('.app-change-text [data-secret-key]').first();
     assert.equal(await encoded.getAttribute('data-secret-key'), this.key);
     await encoded.focus();

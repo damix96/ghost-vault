@@ -4,6 +4,7 @@ export interface SecretInterception {
   key: string;
   alias: string;
   realValue: string;
+  representations?: ReadonlyArray<{ value: string; alias: string }>;
   count: number;
   direction: 'outbound' | 'inbound';
 }

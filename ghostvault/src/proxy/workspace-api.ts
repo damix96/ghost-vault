@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { VaultStore } from '../vault/store.js';
 import { VaultDatabase } from '../vault/sqlite-db.js';
 import { HookManager } from '../hooks/manager.js';
 import { pathToFileURL } from 'node:url';
@@ -9,7 +10,7 @@ import { DefaultRoutes } from '../vault/default-routes.js';
 import { GhostVaultConfig } from '../types/index.js';
 
 export class WorkspaceApi {
-  constructor(private app: FastifyInstance, private db: VaultDatabase, private hooks: HookManager, private proxyConfig: Partial<GhostVaultConfig>) {}
+  constructor(private app: FastifyInstance, private db: VaultDatabase, private hooks: HookManager, private proxyConfig: Partial<GhostVaultConfig>, private vault?: VaultStore) {}
 
   private state = () => {
     const routes = this.db.getAllRoutes();
@@ -40,7 +41,7 @@ export class WorkspaceApi {
       const groups: Record<string, unknown[]> = {
         connections: this.db.getAllRoutes().map(route => ({ ...route, suffix: this.db.getSetting('route_suffix_' + route.id, '') })),
         patterns: this.db.getPatterns(),
-        secrets: [...this.db.getSecrets().map(entry => ({ ...entry, origin: 'manual' })), ...this.db.getAutoSecrets().map(entry => ({ ...entry, origin: 'auto' }))],
+        secrets: [...this.db.getSecrets().map(entry => ({ ...entry, origin: 'manual', representations: this.vault?.getSecretRepresentations(entry), versions: this.db.getVersions().filter(version => version.key === entry.key).map(version => ({ ...version, representations: this.vault?.getSecretRepresentations(version) })) })), ...(this.vault ? this.vault.getAutoSecrets().map(entry => ({ key: entry.key, real_value: entry.realValue, alias: entry.alias, hit_count: entry.hitCount, first_seen_at: entry.createdAt, last_seen_at: entry.updatedAt, origin: 'auto', storage: entry.storage, representations: entry.representations })) : this.db.getAutoSecrets().map(entry => ({ ...entry, origin: 'auto', storage: 'legacy' })))],
         hooks: this.hooks.exportConfiguration(),
         proxy: [{ id: 'proxy', ...this.proxyConfig }],
         settings: Object.entries(this.db.getAllSettings()).map(([key, value]) => ({ key, value })),

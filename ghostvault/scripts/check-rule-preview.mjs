@@ -101,6 +101,7 @@ class RulePreviewCheck {
     await this.page.waitForFunction(() => document.querySelectorAll('#patternForm .app-preview-match').length === 66);
     assert.equal(await this.page.locator('#patternForm .app-preview-match').last().locator('gv-value').evaluate(node => node.value), 'L'.repeat(2000));
     const full = this.page.locator('#patternForm [data-preview-context]').first();
+    await full.locator('xpath=..').locator(':scope > summary').click();
     await full.locator('summary').click();
     assert.equal(await full.locator('pre').textContent(), completeText);
     await this.page.keyboard.press('Escape');

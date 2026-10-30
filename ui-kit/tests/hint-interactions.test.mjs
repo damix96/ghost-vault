@@ -29,54 +29,38 @@ class InteractionFixture {
   dispose = () => this.hint.remove();
 }
 
-test('preview has no pin button; pinned close stays inside the panel without activating the trigger', async t => {
+test('pinning keeps the panel compact; Escape and outside pointer close without activating the trigger', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const fixture = new InteractionFixture();
   await fixture.mount();
-  assert.equal(fixture.hint.shadowRoot.querySelector('button, gv-icon'), null);
   fixture.pointer('pointerenter', { pointerType: 'mouse' });
-  assert.equal(fixture.hint.readState().open, false);
   t.mock.timers.tick(350);
   await fixture.hint.updateComplete;
   assert.equal(fixture.hint.readState().mode, 'preview');
-  let leaked = 0;
-  fixture.hint.addEventListener('gv-activate', () => { leaked++; });
-  assert.equal(fixture.hint.shadowRoot.querySelector('.panel gv-action, .panel button'), null);
   fixture.key('F1');
   await fixture.hint.updateComplete;
   assert.equal(fixture.hint.readState().pinned, true);
-  const close = fixture.hint.shadowRoot.querySelector('.panel gv-action');
-  assert.equal(close.label, 'Закрыть подсказку');
-  close.dispatchEvent(new CustomEvent('gv-activate', { bubbles: true, composed: true }));
-  assert.equal(fixture.hint.readState().open, false);
-  await fixture.hint.updateComplete;
   assert.equal(fixture.hint.shadowRoot.querySelector('.panel gv-action'), null);
-  assert.equal(leaked, 0);
+  fixture.key('Escape');
+  assert.equal(fixture.hint.readState().open, false);
+  fixture.key('F1');
+  document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  assert.equal(fixture.hint.readState().open, false);
   assert.equal(fixture.actions, 0);
   fixture.dispose();
 });
 
-test('optional pin button can be enabled and disabled without changing state or activating the trigger', async () => {
+test('legacy optional pin flag does not add a control strip or change pin state', async () => {
   const fixture = new InteractionFixture();
   await fixture.mount();
-  fixture.pointer('pointerenter', { pointerType: 'mouse' });
   fixture.hint.setAttribute('pin-button', '');
+  fixture.key('F1');
   await fixture.hint.updateComplete;
-  const pin = fixture.hint.shadowRoot.querySelector('.panel gv-action');
-  assert.equal(pin.label, 'Закрепить подсказку');
-  let leaked = 0;
-  fixture.hint.addEventListener('gv-activate', () => { leaked++; });
-  pin.dispatchEvent(new CustomEvent('gv-activate', { bubbles: true, composed: true }));
   assert.equal(fixture.hint.readState().pinned, true);
+  assert.equal(fixture.hint.shadowRoot.querySelector('.panel gv-action'), null);
   fixture.hint.removeAttribute('pin-button');
   await fixture.hint.updateComplete;
   assert.equal(fixture.hint.readState().pinned, true);
-  assert.equal(fixture.hint.shadowRoot.querySelector('.panel gv-action').label, 'Закрыть подсказку');
-  fixture.hint.hide();
-  fixture.pointer('pointerenter', { pointerType: 'mouse' });
-  await fixture.hint.updateComplete;
-  assert.equal(fixture.hint.shadowRoot.querySelector('.panel gv-action'), null);
-  assert.equal(fixture.actions + leaked, 0);
   fixture.dispose();
 });
 

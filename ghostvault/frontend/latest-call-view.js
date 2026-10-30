@@ -6,9 +6,9 @@ import { CallHeaderView } from './call-header-view.js';
 import { CallSecretsView } from './call-secrets-view.js';
 
 export class LatestCallView {
-  static render = (step, mode, vaultSecrets = [], contentMode = 'changes') => {
+  static render = (step, mode, vaultSecrets = [], contentMode = 'changes', session = '') => {
     if (!step) return Ui.empty('Запросов пока нет. Подключите своё приложение по инструкции и отправьте из него обычный запрос.');
-    const entries = [...new Map([...vaultSecrets, ...(step.interceptedSecrets || [])].map(secret => [secret.key, secret])).values()];
+    const entries = [...new Map([...vaultSecrets, ...(step.interceptedSecrets || [])].map(secret => [secret.alias, secret])).values()];
     const display = new SecretDisplay(entries);
     const viewer = new PayloadView(display);
     const sent = PayloadView.parse(step.maskedPrompt);
@@ -16,6 +16,7 @@ export class LatestCallView {
     const request = contentMode === 'changes' ? new ChangeView(display).render(sent) : body === undefined ? Ui.empty('Это представление запроса не сохранено.') : contentMode === 'json' ? viewer.json(body) : viewer.render(body, 'Запрос', 'request');
     const modes = '<div class="app-view-modes" role="group" aria-label="Объём запроса">' + [['changes', 'Места замен'], ['full', 'Полный текст'], ['json', 'JSON']].map(([id, label]) => `<button type="button" data-content-mode="${id}" aria-pressed="${contentMode === id}">${label}</button>`).join('') + '</div>';
     const response = viewer.render(step.response?.body, 'Ответ', 'response') + (step.response?.body !== undefined ? viewer.saved(step.response.body, 'response') : '');
-    return `<gv-stack class="app-latest-call" gap="large">${CallHeaderView.render(step, mode, contentMode)}${CallSecretsView.render(step, sent, display)}<section class="app-request-payload">${modes}${request}</section><section class="app-final-response"><h3>${Ui.explain('Ответ приложению', 'Ответ модели после восстановления секретов: вместо $${<DB_HOST>} снова стоит настоящий адрес.')}</h3>${response}</section></gv-stack>`;
+    const navigation = '<nav class="app-reading-nav" aria-label="Разделы запроса"><button type="button" data-reading-target="response">К ответу</button><button type="button" data-reading-target="variables">Переменные</button></nav>';
+    return `<div class="app-latest-call">${CallHeaderView.render(step, mode, contentMode, session)}${navigation}<div class="app-conversation-grid"><div class="app-chat"><section class="app-request-payload" data-reading-target-id="request" tabindex="-1"><div class="app-chat-toolbar">${modes}${CallHeaderView.modes(mode, contentMode)}</div><div class="app-chat-messages">${request}</div></section><section class="app-final-response" data-reading-key="response.container" data-reading-target-id="response" tabindex="-1"><header class="app-response-heading"><h3>${Ui.explain('Ответ приложению', 'Ответ модели после восстановления секретов: вместо $${<DB_HOST>} снова стоит настоящий адрес.')}</h3><button type="button" class="app-text-button" data-reading-target="request">К запросу</button></header>${response}</section></div>${CallSecretsView.render(step, sent, display)}</div></div>`;
   };
 }

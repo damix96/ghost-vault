@@ -149,7 +149,7 @@ export class GhostProxyServer {
       const match = direction === 'outbound' ? TextReplacer.variants(s).some(value => text.includes(value)) : this.vault.getSecretRepresentations(s).some(form => text.includes(form.alias));
       if (match) {
         this.recordInterception(direction, client, s);
-        intercepted.push({ key: s.key, alias: s.alias, realValue: s.realValue, count: 1, direction });
+        intercepted.push({ key: s.key, alias: s.alias, realValue: s.realValue, representations: this.vault.getSecretRepresentations(s), count: 1, direction });
       }
     }
   };
@@ -175,8 +175,9 @@ export class GhostProxyServer {
     const userAgent = String(req.headers['user-agent'] || '');
     const clientName = req.url.includes('chat') ? 'OpenCode' : (userAgent.includes('Claude') ? 'Claude Code' : (userAgent.includes('Aider') ? 'Aider' : (userAgent.includes('Cursor') ? 'Cursor' : 'AI Client')));
     const sessionId = this.sessionResolver.resolveSessionId(req, clientName);
+    const incomingUrl = req.url;
     const retain = this.historyRetention.capture(sessionId);
-    const record = (transaction: TransactionRecord): void => { if (retain()) this.recordTransaction(transaction); };
+    const record = (transaction: TransactionRecord): void => { if (retain()) this.recordTransaction({ ...transaction, request: { ...transaction.request, url: incomingUrl } }); };
     this.activeSessionId = sessionId;
     this.eventBroadcaster.broadcast({ id: txId + '-start', type: 'request_started', timestamp: new Date().toISOString(), client: clientName, details: { sessionId, transactionId: txId, endpoint: req.url } });
 
@@ -189,15 +190,17 @@ export class GhostProxyServer {
     let reqCtx: RequestContext = { method: req.method, url: req.url, headers, body: req.body, client: clientName };
     reqCtx = await this.hookManager.runBeforeOutboundRequest(reqCtx);
 
+    let inbound = this.vault.snapshot();
     let maskedBody: string | undefined = undefined;
     if (reqCtx.body !== undefined && reqCtx.body !== null) {
       const mapped = this.payloadCodec.request(reqCtx.body, reqCtx.url, text => {
         const remaining = this.vault.maskManualText(text).replace(/\$\$\{<[A-Z0-9_]+>\}/g, ' ');
-        this.patternEngine.scanAndAutoDetect(remaining, (match, type) => this.vault.registerAutoDetectedSecret(match, type));
+        this.patternEngine.scanAndAutoDetect(remaining, (match, type, prefix) => this.vault.registerAutoDetectedSecret(match, type, prefix));
         if (retain()) this.checkAndRecord(text, clientName, interceptedSecrets, 'outbound');
         return this.vault.maskOutboundText(text);
       });
       maskedBody = typeof mapped === 'string' ? mapped : JSON.stringify(mapped);
+      inbound = this.vault.snapshot();
       maskedBody = await this.hookManager.runAfterOutboundMask(maskedBody, reqCtx);
     }
 
@@ -239,7 +242,7 @@ export class GhostProxyServer {
     const resCtx: ResponseContext = { status: upstreamRes.status, headers: resHeaders, body: undefined, isStream: isSse, client: clientName };
 
     if (isSse) {
-      const relay = new StreamRelay(this.vault, this.hookManager, this.eventBroadcaster, this.config.maxBufferWindowChars);
+      const relay = new StreamRelay(inbound, this.hookManager, this.eventBroadcaster, this.config.maxBufferWindowChars);
       const { accumulatedText, sampleStreamChunk, totalChunks } = await relay.run(upstreamRes, reply, resCtx, { txId, sessionId, client: clientName }, text => { if (retain()) this.checkAndRecord(text, clientName, interceptedSecrets, 'inbound'); });
       record({ id: txId, sessionId, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: resCtx, sampleStreamChunk, sampleStreamChunkIndex: 0, interceptedSecrets, timestamp: new Date().toISOString(), latencyMs: Math.round(performance.now() - startPerf), maskedPrompt: maskedBody });
       await this.hookManager.runAfterStream({ totalChunks, accumulatedText, client: clientName });
@@ -250,7 +253,7 @@ export class GhostProxyServer {
     const processedRaw = await this.hookManager.runBeforeInboundResponse(responseText, resCtx);
     const unmask = (text: string): string => {
       if (retain()) this.checkAndRecord(text, clientName, interceptedSecrets, 'inbound');
-      return this.vault.unmaskInboundText(text);
+      return inbound.unmaskInboundText(text);
     };
     let unmaskedResponse: string;
     try { unmaskedResponse = JSON.stringify(this.payloadCodec.response(JSON.parse(processedRaw), unmask)); }

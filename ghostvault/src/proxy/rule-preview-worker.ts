@@ -1,6 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { isIP } from 'node:net';
 import { randomUUID } from 'node:crypto';
+import { LabelTemplate } from '../vault/label-template.js';
 import { PayloadCodec } from '../protocols/payload-codec.js';
 
 interface PreviewRow { id: string; session_id: string; client: string; url: string; timestamp: string; text: string }
@@ -40,7 +41,7 @@ class RulePreviewWorker {
           if (this.seen++ < (workerData.matchOffset || 0)) continue;
           if (this.results.length >= 20) { this.more = true; break; }
           this.contexts[path] = text;
-          this.results.push({ session: row.session_id, client: row.client, endpoint: row.url, timestamp: row.timestamp, transaction: row.id, path, role, value: found, before: text.slice(Math.max(0, match.index - 70), match.index), after: text.slice(match.index + match[0].length, match.index + match[0].length + 70), contextBefore: text.slice(Math.max(0, match.index - 500), match.index), contextAfter: text.slice(match.index + match[0].length, match.index + match[0].length + 500) });
+          this.results.push({ labelPrefix: LabelTemplate.prefix(workerData.type, workerData.label_template, match), session: row.session_id, client: row.client, endpoint: row.url, timestamp: row.timestamp, transaction: row.id, path, role, value: found, before: text.slice(Math.max(0, match.index - 70), match.index), after: text.slice(match.index + match[0].length, match.index + match[0].length + 70), contextBefore: text.slice(Math.max(0, match.index - 500), match.index), contextAfter: text.slice(match.index + match[0].length, match.index + match[0].length + 500) });
         }
       } else if (Array.isArray(value)) value.forEach((item, index) => visit(item, path + '[' + index + ']', role));
       else if (value && typeof value === 'object') {
@@ -53,6 +54,7 @@ class RulePreviewWorker {
   };
 
   run = () => {
+    LabelTemplate.validate(workerData.pattern, workerData.label_template);
     (workerData.rows as PreviewRow[]).forEach(this.scan);
     parentPort?.postMessage({ results: this.results, more: this.more, contexts: this.contexts });
   };

@@ -10,10 +10,11 @@ export class Screens {
 
   static secrets = () => {
     const actions = '<gv-action id="openAddModalBtn" label="Добавить секрет" tone="primary"></gv-action>';
-    const tabs = '<div class="app-inline-actions" role="group" aria-label="Тип секретов"><gv-action id="subTabManualBtn" label="Ручные"></gv-action><span id="manualCount">0</span><gv-action id="subTabAutoBtn" label="Найденные правилами"></gv-action><span id="autoCount">0</span></div>';
+    const tabs = '<div class="app-secret-tabs" role="tablist" aria-label="Тип секретов"><button type="button" role="tab" id="subTabManualBtn" aria-controls="manualVaultTable" aria-selected="true">Ручные <span id="manualCount">0</span></button><button type="button" role="tab" id="subTabAutoBtn" aria-controls="autoVaultTable" aria-selected="false" tabindex="-1">Найденные правилами <span id="autoCount">0</span></button></div>';
     const search = '<input id="searchInput" class="app-search" type="search" aria-label="Поиск секретов" placeholder="Найти по имени, значению или подстановке">';
-    const lists = ['manual', 'auto'].map(id => `<section id="${id}VaultTable"${id === 'auto' ? ' hidden' : ''} aria-label="${id === 'manual' ? 'Ручные секреты' : 'Найденные правилами'}"><div id="${id}TableBody" class="app-secret-list"></div></section>`).join('');
-    return Ui.page('Секреты', 'Реальные значения и подстановки, которые получает модель.', '<div class="app-secret-toolbar">' + tabs + search + '</div>' + lists, actions);
+    const lists = ['manual', 'auto'].map(id => `<section id="${id}VaultTable" role="tabpanel" tabindex="0" aria-labelledby="${id === 'manual' ? 'subTabManualBtn' : 'subTabAutoBtn'}"${id === 'auto' ? ' hidden' : ''}><div id="${id}TableBody" class="app-secret-list"></div></section>`).join('');
+    const related = '<div id="secretRulesLink" class="app-related" hidden><span id="autoRetentionNotice">Новые найденные значения хранятся до перезапуска. Перенесите нужные в ручные.</span>' + Ui.button('Открыть правила', 'page-open', ['rules'], true, '', 'compact') + '</div>';
+    return Ui.page('Секреты', 'Сохранённые значения и их подстановки в запросах к модели.', '<div class="app-secret-toolbar">' + tabs + search + '</div>' + related + lists, actions);
   };
 
   static feed = () => {

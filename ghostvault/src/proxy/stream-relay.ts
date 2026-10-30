@@ -14,7 +14,7 @@ export interface StreamIdentity {
 }
 
 export class StreamRelay {
-  constructor(private vault: VaultStore, private hooks: HookManager, private events: EventBroadcaster, private windowSize: number) {}
+  constructor(private vault: Pick<VaultStore, 'getInboundReplacements' | 'unmaskInboundText'>, private hooks: HookManager, private events: EventBroadcaster, private windowSize: number) {}
 
   public run = async (upstream: Response, reply: FastifyReply, context: ResponseContext, identity: StreamIdentity, onValue: (text: string) => void) => {
     const transformer = new SseTransformer(this.vault, this.windowSize, onValue);

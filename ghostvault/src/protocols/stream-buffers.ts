@@ -11,7 +11,7 @@ interface DeltaBuffer {
 export class StreamBuffers {
   private buffers = new Map<string, DeltaBuffer>();
 
-  constructor(private vault: VaultStore, private windowSize: number, private onValue: (text: string) => void) {}
+  constructor(private vault: Pick<VaultStore, 'getInboundReplacements' | 'unmaskInboundText'>, private windowSize: number, private onValue: (text: string) => void) {}
 
   public append = (key: string, value: string, emit: (value: string) => void, argumentsMode = false): void => {
     let buffer = this.buffers.get(key);

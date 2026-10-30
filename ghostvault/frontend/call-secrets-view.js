@@ -4,15 +4,20 @@ import { Ui } from './ui-components.js';
 export class CallSecretsView {
   static render = (step, sent, display) => {
     const counts = sent === undefined ? new Map() : display.counts(sent);
-    const touched = (step.interceptedSecrets || []).map(secret => secret.key);
+    const touched = sent === undefined ? (step.interceptedSecrets || []).map(secret => secret.alias).filter(Boolean) : [];
     const keys = [...new Set([...counts.keys(), ...touched])];
-    const cards = keys.map(key => {
-      const entry = [...display.aliases.values()].find(item => item.secret.key === key);
-      const alias = entry?.secret.alias;
-      const count = counts.get(key);
-      return `<article class="app-substitution"><header><strong>${entry ? Ui.explain(key, entry.secret.realValue === '' ? '(пустая строка)' : entry.secret.realValue, entry.secret.realValue, key) : escapeHtml(key)}</strong><span>${count === undefined ? 'Обнаружено при обработке' : 'В запросе: ' + count}</span></header><div class="app-substitution-pair"><div><small>Было</small>${entry ? Ui.value(entry.secret.realValue, 'call:' + key, 'Реальное значение') : '<p>Значение не сохранено</p>'}</div><div><small>К модели</small>${alias ? '<div class="app-token">' + display.render(alias) + '</div>' + Ui.button('Копировать подстановку', 'secret-copy', [alias], true, '', 'compact') : '<p>Подстановка не сохранена</p>'}</div></div></article>`;
+    const cards = keys.map(alias => {
+      const entry = display.aliases.get(alias);
+      const key = alias.startsWith('$${<') && alias.endsWith('>}') ? alias.slice(4, -2) : alias;
+      const count = counts.get(alias);
+      const original = entry ? CallSecretsView.value('Было', entry.value, 'Копировать исходное значение ' + key) : '<p class="app-help">Значение не сохранено</p>';
+      const masked = CallSecretsView.value('К модели', alias, 'Копировать подстановку ' + key);
+      return `<details class="app-substitution" data-detail-id="variable.${escapeHtml(alias)}"><summary><span class="app-variable-name">${escapeHtml(key)}</span><span class="app-variable-count" title="${count === undefined ? 'Обнаружено при обработке' : 'Вхождений в запросе'}">${count ===undefined ? 'найдено' : count}</span></summary><div class="app-variable-values">${original}${masked}</div></details>`;
     }).join('');
     const unknown = [...new Set((JSON.stringify(sent) || '').match(/\$\$\{<[^<>]+>\}/g) || [])].filter(alias => !display.aliases.has(alias));
-    return `<section class="app-call-secrets"><h3>Подстановки</h3>${cards || '<p class="app-help">Секреты не найдены.</p>'}${unknown.map(alias => '<article class="app-substitution">' + display.render(alias) + '<p class="app-help">Реальное значение не сохранено.</p></article>').join('')}</section>`;
+    const missing = unknown.map(alias => `<details class="app-substitution" data-detail-id="variable.${escapeHtml(alias)}"><summary><span class="app-variable-name">${escapeHtml(alias)}</span></summary><div class="app-variable-values"><p class="app-help">Реальное значение не сохранено.</p>${CallSecretsView.value('К модели', alias, 'Копировать подстановку')}</div></details>`).join('');
+    return `<aside class="app-call-secrets" aria-label="Переменные" data-reading-target-id="variables" tabindex="-1"><header class="app-variables-heading"><h3>Переменные</h3><span class="app-variable-total">${keys.length + unknown.length}</span></header><p class="app-variables-help">Число справа — вхождения в запросе</p><div class="app-variable-list">${cards}${missing}${!keys.length && !unknown.length ? '<p class="app-help">В запросе подстановок нет</p>' : ''}</div></aside>`;
   };
+
+  static value = (label, value, action) => `<div class="app-variable-value"><header><span>${label}</span></header><div class="app-value-content"><code>${value === '' ? '<span class="app-muted">Пустая строка</span>' : escapeHtml(value)}</code>${Ui.copy(value, action, true)}</div></div>`;
 }

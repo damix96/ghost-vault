@@ -17,6 +17,7 @@ export class DashboardActions {
       ['overview-refresh', () => app.overview.refresh()],
       ['overview-session', id => app.overview.selectSession(id)],
       ['page-open', page => app.switchMainTab(page)],
+      ['found-secrets', () => { app.switchMainTab('secrets'); app.switchSecretsSubTab('auto'); }],
       ['route-open', (id, trigger) => app.connections.open(id, trigger)],
       ['route-settings', (id, trigger) => app.connections.open(id, trigger, 'settings')],
       ['route-template', id => app.connections.applyPreset(id)],

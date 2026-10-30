@@ -6,26 +6,26 @@
 
 ## Hint
 
-У поясняющего trigger без основного действия (`data-hint-only`) click/Enter/Space закрепляет hint; повторное действие закрывает. Обычные кнопки выполняют своё действие сразу. `aria-expanded` отражает состояние. Панель не содержит постоянного F1/touch footer; кнопка закрепления остаётся опциональной. Почему: удалить шум и случайные панели; цель — помощь по намерению; механизм — задержка hover и отдельная семантика hint-only; перехват основной кнопки не применяется.
+У поясняющего trigger без основного действия (`data-hint-only`) click/Enter/Space закрепляет hint; повторное действие закрывает. Обычные кнопки выполняют своё действие сразу. `aria-expanded` отражает состояние. Панель не содержит F1/touch footer, кнопки закрепления или закрытия. Закрепление сохраняет компактное представление. Почему: удалить шум и случайные панели; цель — помощь по намерению; механизм — задержка hover и отдельная семантика hint-only; перехват основной кнопки не применяется.
 
 Состояния `closed / preview / pinned` имеют явные transitions. Hover самого объясняемого control открывает preview после 350 мс намеренного наведения, focus — сразу, без переноса focus; pointer может перейти внутрь. Отдельный «?» не заменяет основной trigger.
 
 Panel anchored к trigger, предпочтительно сверху; placement меняется у границ viewport. Scroll/resize обновляют связь, контейнер overflow не обрезает panel. Фиксированный угол вместо anchoring недопустим.
 
-Pinned допускает text selection/copy/scroll. Outside/Escape/close закрывают нужную панель; контекстное меню и pointer selection внутри не трактуются как случайный outside. Shared engine отвечает за placement, а не новый engine на каждом экране.
+Pinned допускает text selection/copy/scroll. Outside/Escape/повторное нажатие hint-only trigger закрывают нужную панель; контекстное меню и pointer selection внутри не трактуются как случайный outside. Shared engine отвечает за placement, а не новый engine на каждом экране.
 
 Текст сразу объясняет действие/объект/последствия; generic «Подробности» не добавляет смысла. Критические сведения видны в label/окружении, не только hover.
 
-Направление сохранить кнопку закрепления как опцию и выключить в app передал координатор как свою интерпретацию реплик пользователя; это не прямое пользовательское техническое требование и не независимый экспертный вывод. В `remove-hint-pin-button-20261027` API/default false выбрал kit owner. Остальная механика — прежнее авторское решение, не пользовательская UX-приёмка.
+Уточнение 2026-10-31: пользователь попросил убрать нагруженную панель действий при закреплении и усомнился в необходимости кнопки закрытия. Принято: preview/pinned имеют одинаковую компактную структуру, сохраняются outside/Escape/touch/F1. Это заменяет прежнее решение об опциональной кнопке.
 
 - Hover/focus actual control → preview; основной click/Enter/Space выполняет прежнее действие сразу и закрывает hint. Приложение не откладывает click ради распознавания gesture.
-- По умолчанию preview без кнопки закрепления. `GvHint.pinButton=true` (`pin-button`) включает «Закрепить подсказку»; для `GvAction` использовать `hintPinButton=true` (`hint-pin-button`). Одна shared реализация, без consumer копии. В GhostVault оставить false/без атрибута.
-- Опция меняет только наличие кнопки в preview: выключение не закрывает уже pinned hint и не пересоздаёт anchor; F1/touch/readState/hide/events неизменны. Pinned всегда показывает «Закрыть подсказку». Native click/`gv-activate` этих действий не выпускаются наружу и не запускают primary action.
+- `pinButton` / `hintPinButton` оставлены как совместимые legacy properties, но больше не добавляют controls. Их изменение не меняет mode/anchor.
+- Подстановка с `secret-key` и `copy-value`: две строки «Было»/«Ушло», icon-only `gv-copy` рядом с каждым значением. Подстановка внутри panel — native button «Открыть секрет <key>» с `data-secret-open`; приложение обрабатывает переход. Исходный token сохраняет Ctrl+Click/Control+Enter. Copy/переход внутри panel не активируют внешний trigger.
 - F1 без Ctrl/Alt/Meta внутри trigger/panel закрепляет; повторный F1 не переключает обратно. `gv-action` объявляет F1 на actual native button через `aria-keyshortcuts`. Tab/обычные action keys не перехватываются.
 - Escape закрывает только active hint и возвращает focus trigger; событие потребляется до внешнего dialog. Следующий Escape принадлежит внешнему контексту. Outside/hide закрывают без focus stealing.
 - Touch hold: 600 ms на control; движение >8 CSS px, scroll, pointercancel, blur или disconnect отменяют ожидание. Native touch contextmenu на удерживаемом trigger также распознаётся как намерение закрепить; мышиный contextmenu не меняется.
 - Только click от распознанного hold подавляется: до release и максимум 800 ms после него; следующий pointerdown/keyboard intent снимает suppression. Обычный tap/клавиатурный click не теряются. Не ставить global touch-action:none/preventDefault на обычный pointerdown.
-- Panel допускает text selection/обычное copy/contextmenu. Shortcut/hold explanation видны внутри preview, не отдельной иконкой у каждого control.
+- Panel допускает text selection/обычное copy/contextmenu. Иконка копирования сохраняет accessible name, tooltip, check-feedback и live status. Ошибка копирования видима текстом.
 
 Preview связан accessible description в scope anchor; текст имеет tooltip role. Pinned panel — именованный nonmodal dialog без focus trap, close control отделён от текста. Исходный control не получает ложный aria-expanded состояния своей основной операции. ARIA ID-связи не пересекают shadow roots только совпавшей строкой id.
 
@@ -33,10 +33,9 @@ Preview связан accessible description в scope anchor; текст имее
 
 ```html
 <gv-action label="Настроить" hint="Редактор выбранного объекта"></gv-action>
-<gv-action label="Пример opt-in" hint="Текст" hint-pin-button></gv-action>
 ```
 
-Первая строка — app policy; вторая — доступная другим consumers опция. Boolean attrs по присутствию: `hint-pin-button="false"` включает кнопку; в Lit выключать `.hintPinButton=${false}`. Для standalone hint аналогично `.pinButton=${false}` / отсутствие `pin-button`.
+Legacy pin attributes не включают дополнительные кнопки; новые consumers их не используют.
 
 ## Наблюдение из приложения
 

@@ -3,6 +3,7 @@ import { LatestCallView } from './latest-call-view.js';
 import { Ui } from './ui-components.js';
 import { HintLifecycle } from './hint-lifecycle.js';
 import { DisclosureState } from './disclosure-state.js';
+import { ReadingPosition } from './reading-position.js';
 
 
 export class Overview {
@@ -22,6 +23,7 @@ export class Overview {
   sessionGeneration = 0;
   pendingCall = null;
   callDetails = new DisclosureState();
+  renderGeneration = 0;
 
   constructor(app, api) {
     this.app = app;
@@ -43,12 +45,18 @@ export class Overview {
       if (button) this.selectSession(button.dataset.sessionId);
     });
     document.getElementById('overviewConversation').addEventListener('click', event => {
+      const destination = event.target.closest('[data-reading-target]')?.dataset.readingTarget;
+      if (destination) {
+        const target = document.querySelector(`[data-reading-target-id="${destination}"]`);
+        target?.focus({ preventScroll: true });
+        target?.scrollIntoView({ block: 'start', behavior: 'instant' });
+      }
       const button = event.target.closest('[data-content-mode]');
       if (button) {
         this.contentMode = button.dataset.contentMode;
         HintLifecycle.hide(document.getElementById('overviewConversation'));
-        this.renderConversation();
-        document.querySelector(`[data-content-mode="${this.contentMode}"]`)?.focus();
+        this.renderConversation(true);
+        document.querySelector(`[data-content-mode="${this.contentMode}"]`)?.focus({ preventScroll: true });
       }
       const context = event.target.closest('[data-context-toggle]');
       if (context) {
@@ -63,8 +71,8 @@ export class Overview {
       if (!mode || mode === this.mode) return;
       HintLifecycle.hide(document.getElementById('overviewConversation'));
       this.mode = mode;
-      this.renderConversation();
-      document.querySelector(`[data-call-mode="${mode}"]`)?.focus();
+      this.renderConversation(true);
+      document.querySelector(`[data-call-mode="${mode}"]`)?.focus({ preventScroll: true });
     });
     this.renderConversation();
   };
@@ -166,7 +174,7 @@ export class Overview {
       const [health, sessions, routes] = await Promise.all([this.api.request('/health'), this.api.getSessions(), this.api.getRoutes()]);
       if (generation !== this.sessionGeneration || this.app.connections.editor.isOpen()) return;
       this.routes = routes;
-      this.sessions = sessions.filter(session => (session.endpoints || [session.endpoint]).some(endpoint => this.routeFor(endpoint) === this.app.connections.workspace.selected));
+      this.sessions = sessions.filter(session => (session.endpoints || [session.endpoint]).some(endpoint => this.routeFor(endpoint) === this.app.connections.workspace.selected)).sort((a, b) => new Date(b.lastSeen || b.timestamp) - new Date(a.lastSeen || a.timestamp));
       this.renderFirstRun();
       this.app.connections.setRoutes(routes);
       const preview = document.getElementById('overviewStream');
@@ -205,7 +213,7 @@ export class Overview {
     if (window.getSelection()?.toString() || HintLifecycle.pinned(document.getElementById('overviewConversation'))) return;
     this.step = candidate.step;
     this.signature = candidate.signature;
-    this.renderConversation();
+    this.renderConversation(true);
   };
 
   renderSessions = () => {
@@ -228,11 +236,14 @@ export class Overview {
 
   renderRoutes = () => this.app.connections.renderBar();
 
-  renderConversation = () => {
+  renderConversation = (preserveReading = false) => {
     const container = document.getElementById('overviewConversation');
+    const reading = preserveReading ? new ReadingPosition(container) : null;
+    const generation = ++this.renderGeneration;
     const position = container.scrollTop;
-    this.callDetails.render(container, this.step ? LatestCallView.render(this.step, this.mode, [...this.app.manualSecrets, ...this.app.autoSecrets], this.contentMode) : OverviewView.empty());
+    this.callDetails.render(container, this.step ? LatestCallView.render(this.step, this.mode, [...this.app.manualSecrets, ...this.app.autoSecrets], this.contentMode, this.selectedSession || '') : OverviewView.empty());
     container.querySelectorAll('[data-call-mode]').forEach(action => { action.pressed = action.dataset.callMode === this.mode; });
     container.scrollTop = position;
+    if (reading) requestAnimationFrame(() => requestAnimationFrame(() => { if (generation === this.renderGeneration) reading.restore(); }));
   };
 }

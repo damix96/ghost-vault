@@ -25,7 +25,7 @@ export class SecretNavigation {
 
   click = event => {
     this.modifier(event);
-    if (event.ctrlKey && event.button === 0) this.activate(event);
+    if (event.button === 0 && (event.ctrlKey || this.token(event)?.hasAttribute('data-secret-open'))) this.activate(event);
   };
 
   activate = event => {

@@ -1,0 +1,83 @@
+.app-content:has(#viewOverview:not([hidden])) { max-width: 100rem; }
+#overviewDialogLayout { grid-template-columns: 12rem minmax(0,1fr); gap: 1.5rem; }
+#overviewDialogLayout.app-no-sessions { grid-template-columns: minmax(0,1fr); }
+#overviewConversation { overflow: visible; max-height: none; }
+.app-connection-identity { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; min-width: 0; }
+.app-session-header { display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: .75rem 1.5rem; padding: .2rem 0 1.25rem; }
+.app-session-header h3 { margin: 0 0 .3rem; font-size: 1rem; font-weight: 600; }
+.app-current-session { font-size: .75rem; color: #a7b9dc; overflow-wrap: anywhere; }
+.app-session-header .app-call-meta { display: grid; gap: .25rem; text-align: right; }
+.app-conversation-grid { display: grid; grid-template-columns: minmax(0,1fr) 15rem; align-items: start; gap: 1.5rem; }
+.app-chat { min-width: 0; background: #1c1f26; border: 1px solid var(--gv-border); border-radius: .8rem; }
+.app-chat-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .6rem; padding: .85rem 1rem; border-bottom: 1px solid var(--gv-border); background: #20242d; border-radius: .8rem .8rem 0 0; }
+.app-chat-toolbar .app-view-modes { margin: 0; border: 0; background: #181b22; padding: .2rem; }
+.app-chat-toolbar .app-view-modes button { padding: .45rem .65rem; font-size: .8rem; }
+.app-source-modes { display: flex; gap: .3rem; }
+.app-source-label { font-size: .75rem; color: #b5c4dc; }
+.app-chat-messages { padding: .25rem 1.5rem; }
+.app-chat :is(.app-message,.app-change-card) { padding: 1.25rem 0; margin: 0; border: 0; border-bottom: 1px solid var(--gv-border); border-radius: 0; background: transparent; max-height: none; overflow: visible; }
+.app-chat :is(.app-message,.app-change-card):last-child { border-bottom: 0; }
+.app-chat .app-message .app-message { margin: .75rem 0 0; padding: .75rem 0 0; border-top: 1px solid var(--gv-border); border-bottom: 0; }
+.app-chat .app-message[data-role="assistant"] { background: transparent; border-left: 0; }
+.app-chat .app-message-role, .app-change-card header strong { color: #c2d3f1; font-size: .78rem; font-weight: 600; letter-spacing: 0; margin-bottom: .75rem; overflow-wrap: anywhere; }
+.app-chat .app-prose, .app-chat .app-change-text { font-size: .9rem; line-height: 1.85; max-width: 75ch; margin-block: .5rem; }
+.app-chat .app-change-card header { align-items: start; justify-content: space-between; }
+.app-chat .app-change-card header code { font-size: .68rem; color: #a0a7b5; }
+.app-chat .app-change-card header strong { margin: 0; }
+.app-chat .app-context { max-height: none; overflow: visible; padding: 1rem; background: #171a21; border: 1px solid var(--gv-border); }
+.app-chat .app-final-response { margin: 0; padding: 1.25rem 1.5rem; background: #20252e; border-radius: 0 0 .8rem .8rem; }
+.app-chat .app-final-response > h3 { margin: 0 0 .75rem; color: #c2d3f1; font-weight: 600; }
+.app-chat .app-code-block { margin: .75rem 0; }
+.app-chat-messages > .app-code-block .app-code { max-height: none; overflow: visible; }
+.app-code-block figcaption { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 2.5rem; }
+.app-call-secrets { position: sticky; top: 1rem; display: block; padding: 0; border: 0; min-width: 0; }
+.app-variables-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .6rem .4rem; }
+.app-variables-heading h3 { margin: 0; font-size: .85rem; font-weight: 600; }
+.app-variable-total { font: 600 .8rem var(--gv-font); color: #c6d8fc; }
+.app-variables-help { color: var(--gv-muted); font-size: .7rem; margin: 0 .4rem .65rem; }
+.app-variable-list { max-height: calc(100vh - 7rem); overflow: auto; padding: .15rem .3rem; scrollbar-gutter: stable; }
+.app-call-secrets .app-substitution { border: 0; border-bottom: 1px solid var(--gv-border); padding: 0; border-radius: 0; background: transparent; }
+.app-substitution summary { display: flex; align-items: baseline; gap: .4rem; padding: .8rem .2rem; cursor: pointer; list-style: none; }
+.app-substitution summary::-webkit-details-marker { display: none; }
+.app-substitution summary::before { content: ''; width: .35rem; height: .35rem; flex: 0 0 .35rem; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(-45deg); margin-right: .3rem; align-self: center; }
+.app-substitution[open] summary::before { transform: rotate(45deg); }
+.app-substitution summary:hover { color: #c6d8fc; }
+.app-substitution summary:focus-visible { outline: 2px solid var(--gv-focus); outline-offset: -2px; border-radius: .3rem; }
+.app-variable-name { font: .75rem/1.6 Consolas, monospace; overflow-wrap: anywhere; min-width: 0; }
+.app-variable-count { font: .72rem var(--gv-font); color: #b3c3de; margin-left: auto; white-space: nowrap; }
+.app-variable-values { padding: 0 .2rem .8rem; }
+.app-variable-value + .app-variable-value { margin-top: .75rem; }
+.app-variable-value header { display: flex; justify-content: space-between; align-items: center; gap: .25rem; }
+.app-variable-value header span { font: .72rem var(--gv-font); color: var(--gv-muted); }
+.app-variable-value code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font: .75rem/1.7 Consolas, monospace; }
+.app-settings-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .6rem; padding-top: 1rem; border-top: 1px solid var(--gv-border); }
+.app-settings-footer .app-delete-connection { margin-right: auto; }
+.app-settings-footer .app-delete-connection wa-button::part(base) { color: #efb0b3; }
+@media(max-width: 1180px) {
+  #overviewDialogLayout { grid-template-columns: 10rem minmax(0,1fr); gap: 1rem; }
+  .app-conversation-grid { grid-template-columns: minmax(0,1fr) 12rem; gap: 1rem; }
+  .app-chat-messages, .app-chat .app-final-response { padding-inline: 1rem; }
+}
+@media(max-width: 950px) {
+  #overviewDialogLayout { grid-template-columns: minmax(0,1fr); }
+  #overviewSessions { position: static; max-height: 10rem; }
+  #overviewSessionList { display: flex; overflow: auto; }
+  .app-session-row { min-width: 12rem; max-width: 16rem; }
+}
+@media(max-width: 650px) {
+  .app-conversation-grid { display: flex; flex-direction: column; gap: 1rem; }
+  .app-chat, .app-call-secrets { width: 100%; }
+  .app-call-secrets { position: static; }
+  .app-variable-list { max-height: 12rem; }
+  .app-session-header .app-call-meta { text-align: left; }
+  .app-chat-toolbar { padding: .65rem; }
+  .app-chat-toolbar .app-view-modes { width: 100%; }
+  .app-chat-toolbar .app-view-modes button { flex: 1; padding-inline: .35rem; }
+  .app-chat .app-prose, .app-chat .app-change-text { font-size: .875rem; }
+  .app-settings-footer .app-delete-connection { width: 100%; }
+}
+.app-reading-nav { display: flex; gap: 1rem; margin: -.5rem 0 .75rem; }
+.app-reading-nav button { border: 0; background: transparent; color: #aec8ff; font: .8rem var(--gv-font); padding: .4rem 0; cursor: pointer; min-height: 2rem; }
+.app-reading-nav button:focus-visible, [data-reading-target-id]:focus-visible { outline: 2px solid var(--gv-focus); outline-offset: 3px; }
+.app-response-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+[data-reading-target-id] { scroll-margin-top: 1rem; }

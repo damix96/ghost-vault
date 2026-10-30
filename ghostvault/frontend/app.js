@@ -57,10 +57,17 @@ export class DashboardApp {
     document.addEventListener('change', async event => {
       const field = event.target.closest('[data-pattern-toggle]');
       if (!field) return;
+      const focused = document.activeElement === field;
       field.disabled = true;
-      try { await this.handleTogglePattern(field.dataset.patternToggle); }
-      catch (error) { field.checked = !field.checked; this.showToast(error.message); }
-      finally { field.disabled = false; }
+      try {
+        await this.handleTogglePattern(field.dataset.patternToggle);
+        this.ruleResult(field.dataset.patternToggle, 'Изменение сохранено');
+      }
+      catch (error) { field.checked = !field.checked; this.ruleResult(field.dataset.patternToggle, 'Не удалось сохранить: ' + error.message, true); }
+      finally {
+        field.disabled = false;
+        if (focused && [field, document.body].includes(document.activeElement)) [...document.querySelectorAll('[data-pattern-toggle]')].find(node => node.dataset.patternToggle === field.dataset.patternToggle)?.focus({ preventScroll: true });
+      }
     });
     this.events = this.api.connectEvents(event => {
       this.feed.addEvent(event);
@@ -74,11 +81,18 @@ export class DashboardApp {
   bindEvents = () => {
     document.getElementById('viewSecrets').addEventListener('focusout', () => queueMicrotask(this.renderTables));
     document.getElementById('viewSecrets').addEventListener('gv-hint-state', event => { if (!event.detail.open) queueMicrotask(this.renderTables); });
-    ['overview', 'rules', 'secrets', 'feed'].forEach(tab => {
+    ['overview', 'rules', 'secrets'].forEach(tab => {
       const cap = tab.charAt(0).toUpperCase() + tab.slice(1);
       document.getElementById(`nav${cap}Btn`).addEventListener('gv-activate', () => this.switchMainTab(tab));
     });
-    ['manual', 'auto'].forEach(tab => document.getElementById(tab === 'manual' ? 'subTabManualBtn' : 'subTabAutoBtn').addEventListener('gv-activate', () => this.switchSecretsSubTab(tab)));
+    ['manual', 'auto'].forEach(tab => document.getElementById(tab === 'manual' ? 'subTabManualBtn' : 'subTabAutoBtn').addEventListener('click', () => this.switchSecretsSubTab(tab)));
+    document.querySelector('.app-secret-tabs').addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const tab = event.key === 'Home' ? 'manual' : event.key === 'End' ? 'auto' : this.secretsSubTab === 'manual' ? 'auto' : 'manual';
+      this.switchSecretsSubTab(tab);
+      document.getElementById(tab === 'manual' ? 'subTabManualBtn' : 'subTabAutoBtn').focus();
+    });
     document.getElementById('searchInput').addEventListener('input', event => {
       this.searchQuery = event.target.value.toLowerCase();
       this.renderTables();
@@ -103,6 +117,7 @@ export class DashboardApp {
       const data = await this.api.getVault();
       this.manualSecrets = data.manualSecrets || data.manual || [];
       this.autoSecrets = data.autoSecrets || data.auto || [];
+      document.getElementById('autoRetentionNotice').textContent = data.retention?.notice || 'Новые найденные значения хранятся до перезапуска. Перенесите нужные в ручные.';
       this.renderer.renderStatus(true, this.manualSecrets.length + this.autoSecrets.length);
       const signature = JSON.stringify([this.manualSecrets, this.autoSecrets]);
       if (signature !== this.vaultSignature) {
@@ -123,17 +138,20 @@ export class DashboardApp {
   switchMainTab = tab => {
     HintLifecycle.hide();
     this.clipboard.dispose();
-    tab = ['overview', 'rules', 'secrets', 'feed'].includes(tab) ? tab : 'overview';
+    const valid = ['overview', 'rules', 'secrets'].includes(tab);
+    tab = valid ? tab : 'overview';
     this.activeMainTab = tab;
-    if (location.hash !== '#' + tab) history.pushState(null, '', '#' + tab);
+    if (location.hash !== '#' + tab) history[valid ? 'pushState' : 'replaceState'](null, '', '#' + tab);
     document.getElementById('toast').hidden = true;
     ['overview', 'rules', 'secrets', 'feed'].forEach(value => {
       const cap = value.charAt(0).toUpperCase() + value.slice(1);
       document.getElementById(`view${cap}`).hidden = value !== tab;
       const nav = document.getElementById(`nav${cap}Btn`);
-      nav.tone = value === tab ? 'primary' : 'neutral';
-      nav.setAttribute('tone', value === tab ? 'primary' : 'neutral');
-      nav.current = value === tab;
+      if (nav) {
+        nav.tone = value === tab ? 'primary' : 'neutral';
+        nav.setAttribute('tone', value === tab ? 'primary' : 'neutral');
+        nav.current = value === tab;
+      }
     });
     if (tab === 'overview') this.overview.flushConversation();
     if (tab === 'rules') this.fetchPatterns();
@@ -153,14 +171,15 @@ export class DashboardApp {
   renderSecretsSubTabs = () => {
     ['manual', 'auto'].forEach(tab => {
       const button = document.getElementById(tab === 'manual' ? 'subTabManualBtn' : 'subTabAutoBtn');
-      button.tone = this.secretsSubTab === tab ? 'primary' : 'neutral';
-      button.pressed = this.secretsSubTab === tab;
+      button.setAttribute('aria-selected', String(this.secretsSubTab === tab));
+      button.tabIndex = this.secretsSubTab === tab ? 0 : -1;
     });
     document.getElementById('manualCount').textContent = this.manualSecrets.length;
     document.getElementById('autoCount').textContent = this.autoSecrets.length;
     document.getElementById('manualVaultTable').hidden = this.secretsSubTab !== 'manual';
     document.getElementById('autoVaultTable').hidden = this.secretsSubTab !== 'auto';
     document.getElementById('openAddModalBtn').hidden = this.secretsSubTab !== 'manual';
+    document.getElementById('secretRulesLink').hidden = this.secretsSubTab !== 'auto';
   };
 
   renderTables = () => {
@@ -200,7 +219,7 @@ export class DashboardApp {
   openModal = key => this.modals.openSecretModal(key);
 
   handleDeleteSecret = async key => {
-    if (!await this.utilities.confirm('Удалить секрет «' + key + '»?', 'Сохранённая подстановка больше не сможет восстановиться по этой записи. Включённое правило может найти значение снова.')) return;
+    if (!await this.utilities.confirm('Удалить секрет «' + key + '»?', 'Текущая и прежние подстановки этой записи перестанут восстанавливаться. Включённое правило может найти значение снова.')) return;
     await this.api.deleteSecret(key);
     await this.fetchData();
     this.showToast('Секрет удалён. При активном правиле он может обнаружиться заново.');
@@ -215,6 +234,12 @@ export class DashboardApp {
   handleTogglePattern = async id => {
     await this.api.togglePattern(id);
     await this.fetchPatterns();
+  };
+
+  ruleResult = (id, message, error = false) => {
+    const row = [...document.querySelectorAll('[data-rule-record]')].find(node => node.dataset.ruleRecord === id);
+    const status = row?.querySelector('.app-rule-feedback');
+    if (status) { status.textContent = message; status.dataset.error = String(error); }
   };
 
   handleDeletePattern = async id => {

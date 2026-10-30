@@ -14,6 +14,10 @@ export interface SecretEntry {
     jsonSlashEscaped: string;
   };
   priority?: number;
+  storage?: 'memory' | 'legacy' | 'manual';
+  hitCount?: number;
+  retainedVersions?: number;
+  representations?: ReadonlyArray<{ value: string; alias: string }>;
   createdAt: string;
   updatedAt: string;
 }

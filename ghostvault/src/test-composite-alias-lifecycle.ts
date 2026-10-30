@@ -40,8 +40,8 @@ export class CompositeAliasLifecycleTests {
       loadedDb = undefined;
       collisionDb = new VaultDatabase(':memory:');
       const collisionStore = new VaultStore(collisionDb);
-      collisionStore.setManualSecret('COLLISION', secret);
       collisionStore.setManualSecret('COLLISION__GV_JSON1', 'collision-canary');
+      collisionStore.setManualSecret('COLLISION', secret);
       const collisionForm = JSON.stringify(secret).slice(1, -1);
       const collisionAlias = collisionStore.maskOutboundText(collisionForm);
       const reservedAlias = '$${<COLLISION__GV_JSON1>}';

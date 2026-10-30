@@ -11,7 +11,7 @@ export class PayloadView {
 
   render = (value, label = 'Содержимое', path = 'payload') => {
     const data = value;
-    if (typeof data === 'string') return Ui.message(label, `<div class="app-prose">${this.secrets.render(data)}</div>`);
+    if (typeof data === 'string') return Ui.message(label, `<div class="app-prose">${this.secrets.render(data)}</div>`, '', path);
     if (data === undefined || data === null) return Ui.empty('Сохранённое содержимое недоступно');
     if (Array.isArray(data)) return data.map((item, index) => this.block(item, `${label} ${index + 1}`, `${path}.${index}`)).join('');
     if (typeof data !== 'object') return Ui.code(data);
@@ -22,7 +22,7 @@ export class PayloadView {
       return this.render(item, title, `${path}.${key}`);
     }).join('');
     const rest = Object.fromEntries(Object.entries(data).filter(([key]) => !known.has(key)));
-    return content + (Object.keys(rest).length ? Ui.details(content ? 'Остальные поля: ' + Object.keys(rest).join(', ') : label + ' · сохранённый JSON', this.json(rest), path + '.rest') : '');
+    return content + (Object.keys(rest).length ? Ui.details(content ? 'Остальные поля · ' + Object.keys(rest).length : label + ' · сохранённый JSON', this.json(rest), path + '.rest') : '');
   };
 
   block = (value, fallback, path) => {
@@ -44,8 +44,8 @@ export class PayloadView {
       else html += this.render(value[field], field, `${path}.${field}`);
     }
     const rest = Object.fromEntries(Object.entries(value).filter(([key]) => !processed.has(key)));
-    if (Object.keys(rest).length) html += Ui.details('Сохранённые поля: ' + Object.keys(rest).join(', '), this.json(rest), path + '.rest');
-    return Ui.message(title + (identity ? ' · ' + identity : ''), html || this.json(value), role === 'Ассистент' ? 'assistant' : '');
+    if (Object.keys(rest).length) html += Ui.details('Сохранённые поля · ' + Object.keys(rest).length, this.json(rest), path + '.rest');
+    return Ui.message(title + (identity ? ' · ' + identity : ''), html || this.json(value), role === 'Ассистент' ? 'assistant' : '', path);
   };
 
   json = value => CodeView.render(value, text => this.secrets.render(text));

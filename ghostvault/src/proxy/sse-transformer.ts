@@ -15,9 +15,12 @@ export class SseTransformer {
   private context: StreamContext;
   private parser = createParser({ onEvent: event => this.handleEvent(event) });
 
-  constructor(vault: VaultStore, windowSize: number, onValue: (text: string) => void, private adapters: StreamAdapter[] = [new ChatStream(), new AnthropicStream(), new ResponsesStream(), new GeminiStream()]) {
-    this.buffers = new StreamBuffers(vault, windowSize, onValue);
-    const transform = (text: string): string => { onValue(text); return vault.unmaskInboundText(text); };
+  constructor(vault: Pick<VaultStore, 'getInboundReplacements' | 'unmaskInboundText'>, windowSize: number, onValue: (text: string) => void, private adapters: StreamAdapter[] = [new ChatStream(), new AnthropicStream(), new ResponsesStream(), new GeminiStream()]) {
+    const replacements = vault.getInboundReplacements();
+    const inbound = new Map(replacements.map(({ from, to }) => [from, to]));
+    const snapshot = { getInboundReplacements: () => replacements, unmaskInboundText: (text: string) => text.replace(/\$\$\{<[A-Z0-9_]+>\}/g, alias => inbound.get(alias) ?? alias) };
+    this.buffers = new StreamBuffers(snapshot, windowSize, onValue);
+    const transform = (text: string): string => { onValue(text); return snapshot.unmaskInboundText(text); };
     const codec = new PayloadCodec();
     this.context = {
       write: this.write,

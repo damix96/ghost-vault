@@ -7,10 +7,11 @@ import { GvDialog } from './components/dialog.js';
 import { GvDetails } from './components/details.js';
 import { GvFeedback } from './components/feedback.js';
 import { GvValue } from './components/value.js';
+import { GvCopy } from './components/copy.js';
 import { GvStack, GvGrid, GvPanel, GvPage } from './components/layout.js';
 
 export interface RegisterOptions { iconBase?: string }
-const definitions = { 'gv-action': GvAction, 'gv-field': GvField, 'gv-select': GvSelect, 'gv-icon': GvIcon, 'gv-hint': GvHint, 'gv-dialog': GvDialog, 'gv-details': GvDetails, 'gv-feedback': GvFeedback, 'gv-value': GvValue, 'gv-stack': GvStack, 'gv-grid': GvGrid, 'gv-panel': GvPanel, 'gv-page': GvPage };
+const definitions = { 'gv-copy': GvCopy, 'gv-action': GvAction, 'gv-field': GvField, 'gv-select': GvSelect, 'gv-icon': GvIcon, 'gv-hint': GvHint, 'gv-dialog': GvDialog, 'gv-details': GvDetails, 'gv-feedback': GvFeedback, 'gv-value': GvValue, 'gv-stack': GvStack, 'gv-grid': GvGrid, 'gv-panel': GvPanel, 'gv-page': GvPage };
 let pending: Promise<void> | undefined;
 let configuredBase = '';
 

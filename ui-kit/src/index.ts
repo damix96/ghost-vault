@@ -10,6 +10,7 @@ export { GvDialog } from './components/dialog.js';
 export { GvDetails } from './components/details.js';
 export { GvFeedback, type FeedbackState } from './components/feedback.js';
 export { GvValue } from './components/value.js';
+export { GvCopy } from './components/copy.js';
 export { GvStack, GvGrid, GvPanel, GvPage } from './components/layout.js';
 export { EditorSession, type Fields, type SaveTicket } from './models/editor-session.js';
 export { ClipboardTask, type ClipboardWriter, type CopyState } from './models/clipboard-task.js';

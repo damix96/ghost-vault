@@ -1,6 +1,7 @@
 import { VaultDatabase, PatternRow } from './sqlite-db.js';
 import { AnyIpRule } from './any-ip-rule.js';
 import { isIP } from 'node:net';
+import { LabelTemplate } from './label-template.js';
 
 const correctIpPattern = '\\b(?:10(?:\\.\\d{1,3}){3}|192\\.168(?:\\.\\d{1,3}){2}|172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2})(?::\\d+)?\\b';
 
@@ -11,16 +12,7 @@ export class PatternEngine {
     this.db = db;
     this.initializeDefaultPatterns();
     AnyIpRule.install(db);
-    this.cleanupErroneousSecrets();
   }
-
-  private cleanupErroneousSecrets = (): void => {
-    this.db.deleteAutoSecret('AUTO_IP_IDL7');
-    const autoSecrets = this.db.getAutoSecrets();
-    for (const a of autoSecrets) {
-      if (a.real_value === '10.200.1') this.db.deleteAutoSecret(a.key);
-    }
-  };
 
   private initializeDefaultPatterns = (): void => {
     const existing = this.db.getPatterns();
@@ -73,14 +65,16 @@ export class PatternEngine {
 
   public getPatterns = (): PatternRow[] => this.db.getPatterns();
 
-  public addPattern = (name: string, pattern: string, type: string = 'custom'): PatternRow | null => {
+  public addPattern = (name: string, pattern: string, type: string = 'custom', label_template: string | null = null): PatternRow | null => {
     if (!PatternEngine.isValidRegex(pattern)) return null;
+    LabelTemplate.validate(pattern, label_template);
     const id = 'pat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
     const row: PatternRow = {
       id,
       name,
       pattern,
       type,
+      label_template,
       enabled: 1,
       created_at: new Date().toISOString(),
     };
@@ -90,9 +84,10 @@ export class PatternEngine {
 
   public deletePattern = (id: string): boolean => this.db.deletePattern(id);
 
-  public updatePattern = (id: string, draft: Pick<PatternRow, 'name' | 'pattern' | 'type' | 'enabled'>): PatternRow | null => {
+  public updatePattern = (id: string, draft: Pick<PatternRow, 'name' | 'pattern' | 'type' | 'enabled' | 'label_template'>): PatternRow | null => {
     const current = this.db.getPatterns().find(row => row.id === id);
     if (!current || !PatternEngine.isValidRegex(draft.pattern)) return null;
+    LabelTemplate.validate(draft.pattern, draft.label_template === undefined ? current.label_template : draft.label_template);
     const updated = { ...current, ...draft };
     this.db.upsertPattern(updated);
     return updated;
@@ -100,18 +95,15 @@ export class PatternEngine {
 
   public togglePattern = (id: string): PatternRow | null => this.db.togglePattern(id);
 
-  public scanAndAutoDetect = (text: string, onSecretDetected: (match: string, type: string) => void): void => {
-    const active = this.db.getPatterns().filter(p => p.enabled === 1);
-    for (const pat of active) {
-      try {
-        const regex = new RegExp(pat.pattern, 'gi');
-        const matches = text.match(regex);
-        if (matches) {
-          const unique = [...new Set(matches.map(m => m.trim()).filter(m => pat.id === AnyIpRule.id ? isIP(m) !== 0 : m.length > 3))];
-          unique.forEach(m => onSecretDetected(m, pat.type));
-        }
-      } catch {
-        continue;
+  public scanAndAutoDetect = (text: string, onSecretDetected: (match: string, type: string, prefix?: string) => void): void => {
+    for (const pat of this.db.getPatterns().filter(p => p.enabled === 1)) {
+      LabelTemplate.validate(pat.pattern, pat.label_template);
+      const seen = new Set<string>();
+      for (const match of text.matchAll(new RegExp(pat.pattern, 'gi'))) {
+        const value = match[0].trim();
+        if (seen.has(value) || (pat.id === AnyIpRule.id ? !isIP(value) : value.length <= 3)) continue;
+        seen.add(value);
+        onSecretDetected(value, pat.type, LabelTemplate.prefix(pat.type, pat.label_template, match));
       }
     }
   };

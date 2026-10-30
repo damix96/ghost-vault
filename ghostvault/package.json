@@ -20,6 +20,7 @@
     "demo": "node dist/demo.js",
     "zen": "node dist/zen.js",
     "test": "node dist/test-server.js && node dist/test-hooks.js && node dist/test-telemetry.js && node dist/test-mcp.js && node dist/test-sqlite-patterns.js && node dist/test-gateway-regressions.js && node dist/test-protocols.js && node dist/test-protocol-transport.js && node dist/test-protocol-streams.js && node dist/test-native-transport.js && node dist/test-composite-replacements.js && node dist/test-admin-regressions.js",
+    "test:labels": "node dist/test-secret-labels.js",
     "test:composite": "node dist/test-composite-replacements.js",
     "test:admin": "node dist/test-admin-regressions.js",
     "test:e2e": "node dist/e2e-runner.js",
@@ -37,6 +38,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@eslint-community/regexpp": "^4.12.2",
     "@fastify/cors": "^10.1.0",
     "@fastify/static": "^10.1.5",
     "@ghostvault/ui-kit": "file:../ui-kit",

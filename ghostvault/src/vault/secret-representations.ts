@@ -42,7 +42,7 @@ export class SecretRepresentations {
         seen.add(value);
         let alias = secret.alias;
         if (format !== 'raw') {
-          const name = secret.key + '__GV_' + (names[format] || format);
+          const name = secret.alias.slice(4, -2) + '__GV_' + (names[format] || format);
           let suffix = '';
           let counter = 0;
           do { alias = '$${<' + name + suffix + '>}'; suffix = '_' + (++counter); } while (reserved.has(alias));

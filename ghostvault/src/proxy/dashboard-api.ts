@@ -77,13 +77,10 @@ export class DashboardApi {
     };
   };
 
-  private autoSecrets = () => {
-    const counts = new Map(this.vault.getDatabase().getAutoSecrets().map(row => [row.key, row.hit_count]));
-    return this.vault.getAutoSecrets().map(secret => ({ ...secret, hitCount: counts.get(secret.key) }));
-  };
+  private autoSecrets = () => this.vault.getAutoSecrets();
 
   public registerRoutes = (): void => {
-    new WorkspaceApi(this.app, this.vault.getDatabase(), this.hookManager, this.proxyConfig).register();
+    new WorkspaceApi(this.app, this.vault.getDatabase(), this.hookManager, this.proxyConfig, this.vault).register();
     this.app.get('/dashboard', async (_, reply: FastifyReply) => reply.sendFile('index.html'));
 
     this.app.get('/health', async () => ({
@@ -98,6 +95,7 @@ export class DashboardApi {
       manualSecrets: this.vault.getManualSecrets(),
       autoSecrets: this.autoSecrets(),
       lastCall: this.getLastCall(),
+      retention: this.vault.getRetention(),
     }));
 
     this.app.post('/api/vault/secret', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -193,15 +191,7 @@ export class DashboardApi {
 
     this.app.get('/api/patterns', async () => this.patternEngine.getPatterns());
     new PatternEditorApi(this.app, this.patternEngine).register();
-    new RulePreviewApi(this.app, this.vault.getDatabase()).register();
-
-    this.app.post('/api/patterns', async (req: FastifyRequest<{ Body: { name?: string; pattern?: string; type?: string } }>, reply: FastifyReply) => {
-      const body = req.body || {};
-      if (!body.name || !body.pattern) return reply.status(400).send({ error: 'Name and pattern required' });
-      const created = this.patternEngine.addPattern(body.name, body.pattern, body.type || 'custom');
-      if (!created) return reply.status(400).send({ error: 'Invalid regular expression' });
-      return reply.status(200).send({ success: true, pattern: created });
-    });
+    new RulePreviewApi(this.app, this.vault.getDatabase(), this.vault).register();
 
     this.app.delete('/api/patterns/:id', async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const deleted = this.patternEngine.deletePattern(req.params.id);

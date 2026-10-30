@@ -6,14 +6,19 @@ export class RulePreview {
   timer = null;
   controller = null;
   contexts = new Map();
+  groups = new Map();
+  notices = new Set();
   state = null;
 
   constructor(api, host, read) {
     this.api = api;
     this.host = host;
     this.read = read;
-    host.innerHTML = '<section class="app-rule-preview" aria-label="Проверка по сессиям"><h3>Совпадения в сессиях</h3><p class="app-help">По одному последнему сохранённому запросу каждой сессии, во всех соединениях. Проверка исходящих полей тем же обработчиком протокола, до применения уже сохранённых секретов.</p><p class="app-help">Исходные запросы проверяются целиком. Результаты загружаются порциями; остальные доступны через «Показать ещё». Правило и секреты не изменяются.</p><p class="app-preview-status" role="status" aria-live="polite"></p><div class="app-preview-results"></div><button type="button" class="app-text-button" data-preview-more hidden>Показать ещё</button></section>';
+    host.innerHTML = '<section class="app-rule-preview" aria-label="Проверка по сессиям"><h3>Совпадения в сессиях</h3><p class="app-help">Проверка черновика. Правило и секреты не изменяются.</p><details class="app-preview-context"><summary>Какие данные проверяются</summary><p class="app-help">По одному последнему сохранённому запросу каждой сессии, во всех подключениях. Исходящие поля проверяются целиком обработчиком протокола, до применения сохранённых секретов. Результаты загружаются порциями; остальные доступны через «Показать ещё».</p></details><p class="app-preview-status" role="status" aria-live="polite"></p><div class="app-preview-results"></div><button type="button" class="app-text-button" data-preview-more hidden>Показать ещё</button></section>';
     this.status = host.querySelector('.app-preview-status');
+    this.notice = document.createElement('p');
+    this.notice.className = 'app-help app-preview-notice';
+    this.status.after(this.notice);
     this.results = host.querySelector('.app-preview-results');
     this.more = host.querySelector('[data-preview-more]');
     this.more.addEventListener('click', () => this.run(this.revision));
@@ -35,6 +40,9 @@ export class RulePreview {
     this.cancel();
     this.results.replaceChildren();
     this.contexts.clear();
+    this.groups.clear();
+    this.notices.clear();
+    this.notice.textContent = '';
     this.state = null;
     this.more.hidden = true;
     this.status.textContent = 'Ожидаем ввод…';
@@ -56,12 +64,21 @@ export class RulePreview {
       while (!signal.aborted) {
         const data = await this.api.request('/api/pattern-preview', { method: 'POST', signal, body: JSON.stringify(state) });
         if (revision !== this.revision || signal.aborted) return;
-        const cards = data.results.map(match => {
+        for (const match of data.results) {
+          if (match.labelNotice) this.notices.add(match.labelNotice);
           const contextId = String(this.contexts.size);
           this.contexts.set(contextId, data.contexts?.[match.path] ?? '');
-          return RulePreview.card(match, contextId);
-        });
-        this.results.insertAdjacentHTML('beforeend', cards.join(''));
+          const groupKey = JSON.stringify([match.transaction, match.session, match.path]);
+          if (!this.groups.has(groupKey)) {
+            const group = document.createElement('section');
+            group.className = 'app-preview-group';
+            group.innerHTML = '<header><strong>' + escapeHtml(match.client || 'Сессия') + '</strong><code>' + escapeHtml(match.session) + '</code></header><p class="app-help">' + escapeHtml(match.endpoint) + ' · ' + escapeHtml(match.path) + (match.role ? ' · ' + escapeHtml(match.role) : '') + '</p>';
+            this.results.append(group);
+            this.groups.set(groupKey, group);
+          }
+          this.groups.get(groupKey).insertAdjacentHTML('beforeend', RulePreview.card(match, contextId));
+        }
+        this.notice.textContent = [...this.notices].join(' ');
         state.shown += data.results.length;
         state.offset = data.next;
         state.matchOffset = data.matchOffset || 0;
@@ -92,6 +109,7 @@ export class RulePreview {
     const context = '<details class="app-preview-context"><summary>Расширенный контекст</summary><p class="app-change-text">' + escapeHtml(match.contextBefore ?? match.before) + '<mark>' + excerpt + '</mark>' + escapeHtml(match.contextAfter ?? match.after) + '</p></details>';
     const fullContext = '<details class="app-preview-context" data-preview-context="' + contextId + '"><summary>Полный контекст поля</summary><pre class="app-code"></pre></details>';
     const exact = value.length > 1024 ? '<p class="app-help">Совпадение длинное. Полное значение:</p>' + Ui.value(value, 'preview:' + match.transaction + ':' + match.path, 'Полное совпадение') : '';
-    return '<article class="app-preview-match"><header><strong>' + escapeHtml(match.client || 'Сессия') + '</strong><code>' + escapeHtml(match.session) + '</code></header><p class="app-help">' + escapeHtml(match.endpoint) + ' · ' + escapeHtml(match.path) + (match.role ? ' · ' + escapeHtml(match.role) : '') + '</p>' + matchText + exact + context + fullContext + '</article>';
+    const label = match.alias ? '<div class="app-preview-alias"><span>' + (match.existing ? 'Сохранённая подстановка' : 'Пример подстановки') + '</span><code>' + escapeHtml(match.alias) + '</code></div>' : '';
+    return '<article class="app-preview-match"><div class="app-preview-value"><code>' + excerpt + '</code></div>' + label + '<details class="app-preview-context"><summary>Контекст совпадения</summary>' + matchText + exact + context + fullContext + '</details></article>';
   };
 }

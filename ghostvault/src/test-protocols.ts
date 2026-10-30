@@ -259,7 +259,7 @@ export class ProtocolTests {
   private verifyManualPriority = (): void => {
     const store = new VaultStore(new VaultDatabase(':memory:'));
     store.setManualSecret('PROTO_DUPLICATE', this.secret);
-    store.setAutoSecret('PROTO_DUPLICATE', this.secret);
+    assert.throws(() => store.setAutoSecret('PROTO_DUPLICATE', this.secret), /уже использовалось/);
     store.deleteSecret('PROTO_DUPLICATE');
     assert.equal(store.getManualSecrets().some(secret => secret.key === 'PROTO_DUPLICATE'), false);
     assert.equal(store.getAutoSecrets().some(secret => secret.key === 'PROTO_DUPLICATE'), false);

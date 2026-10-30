@@ -17,7 +17,7 @@
 | Один explicit styles entry | JS/CSS имеют разные effects → compiled ready theme/utilities/tokens → runtime JS не импортирует CSS; нет preflight/native reset → двойной reset мог бы повредить consumer |
 | Bounded semantic API | Page не копирует internals → props/events/slots и малые layouts → arbitrary HTML/class/style bags и универсальный JSON renderer не дают устойчивого контракта |
 | Native/vendor popup/dialog | Геометрия/focus сложнее adapter → WA Popup flip/shift/hover bridge/top layer и WA Dialog → своего engine/modal trap нет; browser evidence ограничено [конкретными probes](testing.md) |
-| Опциональная кнопка закрепления hint | Направление optional/off передал координатор как свою интерпретацию реплик пользователя, не прямое техническое требование пользователя или независимый экспертный вывод → API GvHint.pinButton / GvAction.hintPinButton и default false выбрал kit owner → одна shared реализация, F1/touch/primary сохранены без app CSS-hide; [контракт](../interaction/overlays.md) |
+| Прежнее решение: опциональная кнопка закрепления hint (заменено 2026-10-31) | Направление optional/off передал координатор как свою интерпретацию реплик пользователя, не прямое техническое требование пользователя или независимый экспертный вывод → API GvHint.pinButton / GvAction.hintPinButton и default false выбрал kit owner → одна shared реализация, F1/touch/primary сохранены без app CSS-hide; [контракт](../interaction/overlays.md) |
 | Headless string editor/copy/hint | Dirty/race/late copy независимы от renderer → классы без API/network + immutable ticket → form schema framework и обещание atomic concurrency без backend revision излишни |
 
 Все зависимости exact в локальном lock. Runtime: Lit/Web Awesome; tooling/test/dev: Vite/Tailwind/TS/Lucide-static/happy-dom. Notices сохраняются; собственный package private/UNLICENSED, publish не выполнялся. Локализация ready controls: en vendor default + зарегистрированная ru; labels kit задаются текстом consumer, вспомогательные copy/hint подписи 0.1.0 русские.
@@ -40,3 +40,7 @@ Engine exception: vendor/Floating UI измеряет anchor/viewport и пиш�
 - Host CSP/Trusted Types, nested themes, coexistence с иной WA version и app integration не подтверждены; headers/app config не менять ради обхода.
 - Пакет остаётся private experimental 0.1.0; непубликовавшаяся рабочая версия развивается в первой согласованной app migration. Перед стабильным release согласовать version/deprecation policy и зафиксировать единый JS/CSS/assets/types комплект. Publish не выполнялся.
 - Backend revision/atomic save, domain payload schemas и provider success остаются у смежных владельцев. Kit не добавляет скрытые endpoints и не имитирует доступность модели.
+
+## Уточнение 2026-10-31
+
+Пользователь попросил минимальное закрепление без ряда кнопок. Pinned сохраняет тот же компактный panel; Escape/outside/повтор trigger закрывают, копирование — соседняя иконка с доступным именем. Legacy pin properties не меняют UI. Это уменьшает визуальную нагрузку без собственного overlay engine; [действующий контракт](../interaction/overlays.md).

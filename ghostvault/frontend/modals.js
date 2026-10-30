@@ -18,9 +18,10 @@ export class ModalManager {
   init = () => {
     document.getElementById('editorHost').innerHTML = EditorViews.shell();
     const preview = document.createElement('aside');
-    document.getElementById('patternForm').append(preview);
-    this.rulePreview = new RulePreview(this.api, preview, () => ({ pattern: Ui.read('patternRegexInput'), anyIp: false }));
-    document.getElementById('patternRegexInput').addEventListener('gv-input', this.rulePreview.schedule);
+    const patternForm = document.getElementById('patternForm');
+    patternForm.append(preview, patternForm.querySelector('.app-form-actions'));
+    this.rulePreview = new RulePreview(this.api, preview, () => ({ pattern: Ui.read('patternRegexInput'), type: Ui.read('patternTypeInput') || 'custom', label_template: Ui.read('patternTemplateInput') || null, anyIp: false }));
+    ['patternRegexInput', 'patternTypeInput', 'patternTemplateInput'].forEach(id => document.getElementById(id).addEventListener('gv-input', this.rulePreview.schedule));
     document.getElementById('openAddModalBtn').addEventListener('gv-activate', () => this.openSecretModal());
     document.getElementById('cancelModalBtn').addEventListener('gv-activate', this.closeSecretModal);
     document.getElementById('cancelPatternModalBtn').addEventListener('gv-activate', () => this.togglePatternModal(false));
@@ -52,12 +53,15 @@ export class ModalManager {
     const draft = this.drafts.get(secretKey || '');
     key.value = draft?.key ?? secret?.key ?? '';
     key.readonly = Boolean(secret);
-    key.description = secret ? 'Имя сохранённой подстановки. Изменяется только значение и описание.' : EditorViews.keyDescription;
-    dialog.heading = secret ? 'Изменить секрет' : 'Добавить секрет';
+    key.label = secret ? 'Имя записи' : 'Имя подстановки';
+    key.description = secret ? 'Постоянное имя записи. При изменении значения подстановка обновится.' : EditorViews.keyDescription;
+    const restored = draft && (draft.key !== (secret?.key || '') || draft.value !== (secret?.realValue || '') || draft.description !== (secret?.description || ''));
+    dialog.heading = (secret ? 'Изменить секрет' : 'Добавить секрет') + (restored ? ' · черновик' : '');
     document.getElementById('modalValInput').value = draft?.value ?? secret?.realValue ?? '';
     document.getElementById('modalDescInput').value = draft?.description ?? secret?.description ?? '';
-    document.getElementById('modalPreviewToken').textContent = key.value ? '${<' + key.value + '>}' : 'Введите имя';
-    document.getElementById('secretSaveEffect').textContent = secret ? (secret.maskInAi ? 'Сохранение изменит точное значение и описание этой записи. Следующие поддерживаемые запросы используют сохранённое значение.' : 'Сейчас замена этой записи выключена. Сохранение изменения включит замену для следующих поддерживаемых запросов.') : 'Сохранение добавит и включит замену этого точного значения. Запрос к модели не выполняется.';
+    document.getElementById('modalPreviewToken').textContent = secret?.alias || (key.value ? '$${<' + key.value + '>}' : 'Введите имя');
+    document.getElementById('modalPreviewLabel').textContent = secret ? 'Текущая подстановка' : 'В запросе';
+    document.getElementById('secretSaveEffect').textContent = secret ? (secret.maskInAi ? 'Замена останется включена. ' : 'Замена останется выключена. ') + 'При изменении значения новая подстановка появится после сохранения; прежняя восстанавливает только старые ответы.' : 'Сохранение добавит и включит замену этого точного значения. Запрос к модели не выполняется.';
     Ui.error('secretFormError', '');
     document.getElementById('secretForm').querySelectorAll('gv-field').forEach(field => { field.error = ''; });
     dialog.show(document.activeElement, document.querySelector('#viewSecrets gv-page'));
@@ -113,7 +117,7 @@ export class ModalManager {
       this.app.showToast('Секрет сохранён');
     });
 
-  handleSavePattern = event => this.save(event, 'pattern', () => this.api.createPattern({ name: Ui.read('patternNameInput'), pattern: Ui.read('patternRegexInput'), type: Ui.read('patternTypeInput') || 'custom' }), async () => {
+  handleSavePattern = event => this.save(event, 'pattern', () => this.api.createPattern({ name: Ui.read('patternNameInput'), pattern: Ui.read('patternRegexInput'), type: Ui.read('patternTypeInput') || 'custom', label_template: Ui.read('patternTemplateInput') || null }), async () => {
     document.getElementById('patternForm').reset();
     await this.app.fetchPatterns();
     this.app.showToast('Правило создано и включено');

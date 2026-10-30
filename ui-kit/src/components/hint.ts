@@ -10,24 +10,22 @@ export class GvHint extends GvElement {
     .panel{box-sizing:border-box;width:max-content;min-width:12rem;max-width:min(30rem,var(--auto-size-available-width,90vw));max-height:min(28rem,var(--auto-size-available-height,70vh));overflow:auto;background:var(--gv-hint-surface,#252b36);color:var(--gv-text);border:1px solid #526079;border-radius:.75rem;padding:1rem 1.1rem;box-shadow:0 8px 32px #0006,0 1px 3px #0004;font:400 .8125rem/1.65 var(--gv-font);text-align:left;overflow-wrap:anywhere}
     .title{font-size:.72rem;font-weight:600;color:#aabbd6;margin-bottom:.55rem;max-width:26rem;overflow-wrap:anywhere}
     .text{white-space:pre-wrap;max-width:28rem}
-    .controls{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;margin-top:.8rem;padding-top:.7rem;border-top:1px solid #465064;white-space:normal}
-    .copy-status{font-size:.75rem;color:#bdcfee}
+    .value-row{display:flex;align-items:baseline;gap:.45rem;max-width:28rem}
+    .value-row + .value-row{margin-top:.35rem}
+    .value-row>span:first-child{color:var(--gv-muted);font-size:.75rem;flex:0 0 2.6rem}
+    .value-row code{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0;font:inherit}
+    .value-row gv-copy{flex-shrink:0;align-self:center}
+    button.token{padding:0;border:0;background:transparent;color:var(--gv-link,#aec8ff);font:inherit;text-align:left;text-decoration:underline;text-underline-offset:3px;cursor:pointer;overflow-wrap:anywhere}
     :host-context(.app-secret-control) [data-secret-key]{cursor:pointer;text-decoration:underline;text-underline-offset:3px}
     [data-secret-key]:focus-visible{outline:2px solid var(--gv-focus);outline-offset:3px}
     wa-popup::part(popup){z-index:1000}`;
   private static current?: GvHint;
   text = '';
   label = '';
-  copyValue = '';
+  copyValue?: string;
   secretKey?: string;
-  private token = () => html`<span data-secret-key=${this.secretKey ?? nothing} tabindex=${this.secretKey === undefined ? nothing : '0'} aria-keyshortcuts=${this.secretKey === undefined ? nothing : 'Control+Enter'}>${this.label}</span>`;
+  private token = () => this.secretKey === undefined ? html`<span>${this.label}</span>` : html`<button type="button" class="token" data-secret-key=${this.secretKey} data-secret-open aria-label=${'Открыть секрет ' + this.secretKey} title="Открыть секрет" aria-keyshortcuts="Control+Enter">${this.label}</button>`;
   private body = () => this.secretKey === undefined || !this.label ? this.text : this.text.split(this.label).map((part, index) => html`${index ? this.token() : nothing}${part}`);
-  private copyStatus = '';
-  private copy = async () => {
-    try { await navigator.clipboard.writeText(this.copyValue); this.copyStatus = 'Скопировано'; }
-    catch { this.copyStatus = 'Не удалось скопировать'; }
-    this.requestUpdate();
-  };
   pinButton = false;
   private readonly state = new HintState();
   private readonly touch = new HintTouch(() => this.pin());
@@ -84,7 +82,7 @@ export class GvHint extends GvElement {
   private key = (event: KeyboardEvent) => {
     if (event.composedPath().includes(this)) {
       this.touch.reset();
-      if (this.anchor?.hasAttribute('data-hint-only') && ['Enter', ' '].includes(event.key)) {
+      if (this.anchor?.hasAttribute('data-hint-only') && event.composedPath().includes(this.anchor) && ['Enter', ' '].includes(event.key)) {
         event.preventDefault();
         this.state.pinned() ? this.close(true) : this.pin();
         return;
@@ -108,11 +106,6 @@ export class GvHint extends GvElement {
   private activated = () => {
     if (this.anchor?.hasAttribute('data-hint-only')) this.state.pinned() ? this.close(true) : this.pin();
     else this.close();
-  };
-  private panelAction = (event: Event) => {
-    event.stopPropagation();
-    if (this.state.pinned()) this.close(true);
-    else this.pin();
   };
   private panelClick = (event: Event) => event.stopPropagation();
 
@@ -198,9 +191,8 @@ export class GvHint extends GvElement {
   render = () => html`
     <slot @slotchange=${this.attach}></slot>
     <wa-popup .anchor=${this.anchor} .active=${Boolean(this.anchor) && this.state.active()} placement="top" flip shift hover-bridge auto-size="both" distance="8" @pointerenter=${this.preview} @pointerleave=${this.leave}>
-      <div id="panel" class="panel" role=${this.state.pinned() ? 'dialog' : 'group'} aria-label=${this.label} @focusout=${this.leave}>
-        <div class="title">${this.token()}</div><div class="text" role=${this.state.pinned() ? 'none' : 'tooltip'}>${this.body()}</div>
-        ${this.state.pinned() || this.pinButton || this.copyValue ? html`<div class="controls" @click=${this.panelClick}>${this.copyValue ? html`<gv-action size="compact" label="Копировать значение" @gv-activate=${this.copy}></gv-action><span class="copy-status" role="status">${this.copyStatus}</span>` : ''}<gv-action size="compact" .label=${this.state.pinned() ? 'Закрыть подсказку' : 'Закрепить подсказку'} @gv-activate=${this.panelAction}></gv-action></div>` : ''}
+      <div id="panel" class="panel" role=${this.state.pinned() ? 'dialog' : 'group'} aria-label=${this.label} @focusout=${this.leave} @click=${this.panelClick}>
+        ${this.secretKey !== undefined && this.copyValue !== undefined ? html`<div class="value-row"><span>Было</span><code>${this.copyValue === '' ? '(пустая строка)' : this.copyValue}</code><gv-copy .value=${this.copyValue} label="Копировать исходное" compact></gv-copy></div><div class="value-row"><span>Ушло</span><code class="title">${this.token()}</code><gv-copy .value=${this.label} label="Копировать подстановку" compact></gv-copy></div>` : html`<div class="title">${this.token()}</div><div class="text" role=${this.state.pinned() ? 'none' : 'tooltip'}>${this.body()}</div>`}
       </div>
     </wa-popup>`;
 }

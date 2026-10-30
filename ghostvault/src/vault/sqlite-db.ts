@@ -3,73 +3,20 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { DefaultRoutes } from './default-routes.js';
+import { AliasRegistry } from './alias-registry.js';
+import { RuntimeLease } from './runtime-lease.js';
 
-export interface SecretRow {
-  key: string;
-  real_value: string;
-  alias: string;
-  mask_in_ai: number;
-  description: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface AutoSecretRow {
-  key: string;
-  real_value: string;
-  alias: string;
-  hit_count: number;
-  first_seen_at: string;
-  last_seen_at: string;
-}
-
-export interface PatternRow {
-  id: string;
-  name: string;
-  pattern: string;
-  type: string;
-  enabled: number;
-  created_at: string;
-}
-
-export interface SessionRow {
-  endpoint?: string;
-  endpoints?: string;
-  id: string;
-  client: string;
-  first_seen: string;
-  last_seen: string;
-  tx_count: number;
-}
-
-export interface TransactionRow {
-  id: string;
-  session_id: string;
-  client: string;
-  method: string;
-  url: string;
-  status: number;
-  latency_ms: number;
-  prompt_text: string;
-  masked_prompt: string;
-  model_response: string;
-  intercepted_secrets: string;
-  timestamp: string;
-  target_provider?: string;
-  target_url?: string;
-}
-
-export interface RouteRow {
-  id: string;
-  name: string;
-  prefix: string;
-  upstream_url: string;
-  description: string;
-  is_custom: number;
-}
+import { SecretRow, AutoSecretRow, PatternRow, SessionRow, TransactionRow, RouteRow } from './database-types.js';
+export type { SecretRow, AutoSecretRow, PatternRow, SessionRow, TransactionRow, RouteRow } from './database-types.js';
 
 export class VaultDatabase {
   private db: DatabaseSync;
+  public aliases: AliasRegistry;
+  private lease: RuntimeLease;
+  public claimRuntime = (): void => this.lease.acquire();
+  public getVersions = (): SecretRow[] => this.db.prepare('SELECT * FROM secret_versions').all() as unknown as SecretRow[];
+  public archiveSecret = (key: string): void => { this.db.prepare('INSERT INTO secret_versions SELECT * FROM secrets WHERE key = ?').run(key); };
+  public deleteVersions = (key: string): void => { this.db.prepare('DELETE FROM secret_versions WHERE key = ?').run(key); };
 
   constructor(customPath?: string) {
     const dbPath = customPath || process.env.GHOSTVAULT_DB_PATH || path.join(os.homedir(), '.ghostvault', 'vault.db');
@@ -80,6 +27,10 @@ export class VaultDatabase {
     this.db = new DatabaseSync(dbPath);
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.createTables();
+    this.aliases = new AliasRegistry(this.db);
+    this.lease = new RuntimeLease(dbPath === ':memory:' ? dbPath : fs.realpathSync(dbPath));
+    this.db.exec('CREATE TABLE IF NOT EXISTS secret_versions AS SELECT * FROM secrets WHERE 0;');
+    if (!this.db.prepare('PRAGMA table_info(patterns)').all().some(row => row.name === 'label_template')) this.db.exec('ALTER TABLE patterns ADD COLUMN label_template TEXT;');
   }
 
   private createTables = (): void => {
@@ -166,7 +117,7 @@ export class VaultDatabase {
 
   public upsertSecret = (row: SecretRow): void => {
     this.db.prepare(
-      'INSERT OR REPLACE INTO secrets (key, real_value, alias, mask_in_ai, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO secrets (key, real_value, alias, mask_in_ai, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET real_value=excluded.real_value, alias=excluded.alias, mask_in_ai=excluded.mask_in_ai, description=excluded.description, updated_at=excluded.updated_at'
     ).run(row.key, row.real_value, row.alias, row.mask_in_ai, row.description, row.created_at, row.updated_at);
   };
 
@@ -178,7 +129,7 @@ export class VaultDatabase {
 
   public upsertAutoSecret = (row: AutoSecretRow): void => {
     this.db.prepare(
-      'INSERT OR REPLACE INTO auto_secrets (key, real_value, alias, hit_count, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO auto_secrets (key, real_value, alias, hit_count, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)'
     ).run(row.key, row.real_value, row.alias, row.hit_count, row.first_seen_at, row.last_seen_at);
   };
 
@@ -190,8 +141,8 @@ export class VaultDatabase {
 
   public upsertPattern = (row: PatternRow): void => {
     this.db.prepare(
-      'INSERT OR REPLACE INTO patterns (id, name, pattern, type, enabled, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(row.id, row.name, row.pattern, row.type, row.enabled, row.created_at);
+      'INSERT OR REPLACE INTO patterns (id, name, pattern, type, enabled, created_at, label_template) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(row.id, row.name, row.pattern, row.type, row.enabled, row.created_at, row.label_template ?? null);
   };
 
   public deletePattern = (id: string): boolean =>
@@ -285,5 +236,5 @@ export class VaultDatabase {
   public deleteRoute = (id: string): boolean =>
     Number(this.db.prepare('DELETE FROM routes WHERE id = ? AND is_custom = 1').run(id).changes) > 0;
 
-  public close = (): void => this.db.close();
+  public close = (): void => { this.db.close(); this.lease.close(); };
 }

@@ -12,7 +12,7 @@ export class UtilityDialogs {
     const dialog = document.getElementById('confirmDialog');
     let accepted = false;
     dialog.heading = heading;
-    dialog.innerHTML = `<gv-stack><p>${escapeHtml(message)}</p><div class="app-inline-actions"><gv-action label="Удалить" tone="danger" data-confirm></gv-action><gv-action label="Оставить" data-cancel autofocus></gv-action></div></gv-stack>`;
+    dialog.innerHTML = `<gv-stack><p>${escapeHtml(message)}</p><div class="app-form-actions"><gv-action label="Оставить" data-cancel autofocus></gv-action><gv-action label="Удалить" tone="danger" data-confirm></gv-action></div></gv-stack>`;
     const action = event => {
       if (event.target.hasAttribute('data-confirm')) { accepted = true; dialog.hide(); }
       if (event.target.hasAttribute('data-cancel')) dialog.hide();

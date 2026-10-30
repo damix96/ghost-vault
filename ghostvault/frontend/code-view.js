@@ -5,7 +5,7 @@ import { escapeHtml } from './utils.js';
 hljs.registerLanguage('json', json);
 
 export class CodeView {
-  static render = (value, decorate) => {
+  static render = (value, decorate, action = '') => {
     const source = typeof value === 'string' ? value : JSON.stringify(value, null, 2) ?? '';
     let isJson = false;
     try { JSON.parse(source); isJson = true; } catch {}
@@ -24,6 +24,6 @@ export class CodeView {
       markup = template.innerHTML;
     }
     const code = `<pre class="app-code" tabindex="0"><code${isJson ? ' class="language-json"' : ''}>${markup}</code></pre>`;
-    return isJson ? '<figure class="app-code-block"><figcaption>JSON</figcaption>' + code + '</figure>' : code;
+    return isJson || action ? '<figure class="app-code-block"><figcaption><span>' + (isJson ? 'JSON' : 'Текст') + '</span>' + action + '</figcaption>' + code + '</figure>' : code;
   };
 }

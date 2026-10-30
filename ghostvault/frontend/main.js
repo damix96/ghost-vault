@@ -2,6 +2,8 @@ import '@ghostvault/ui-kit/styles.css';
 import { registerKit } from '@ghostvault/ui-kit';
 import './dashboard.css';
 import './workspace.css';
+import './overview.css';
+import './management.css';
 import { DashboardApp } from './app.js';
 
 try {
