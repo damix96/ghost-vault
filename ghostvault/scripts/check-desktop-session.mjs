@@ -5,7 +5,7 @@ import { UiTestHost } from './ui-test-host.mjs';
 
 class DesktopSessionCheck {
   host = new UiTestHost();
-  out = '../docs/ux-research/desktop-session-refinement-20261031/screenshots';
+  out = process.env.UI_SCREENSHOT_DIR || '../docs/ux-research/desktop-session-refinement-20261031/screenshots';
   errors = [];
   long = 'Начало поля. ' + 'Сохраняем читаемый контекст сообщения. '.repeat(25) + '$${<DB_HOST>}' + ' Продолжение исходного поля.'.repeat(35);
   run = async () => {
@@ -22,8 +22,7 @@ class DesktopSessionCheck {
       { role: 'assistant', content: 'Проверка $${<DB_HOST>} завершена.' },
       { role: 'user', content: this.long },
     ];
-    this.host.database.upsertSession('desktop-session-fixture', 'Ignored display name');
-    this.host.database.saveTransaction({ id: 'desktop-tx', session_id: 'desktop-session-fixture', client: 'Desktop fixture', method: 'POST', url: '/' + routes[0].prefix + '/v1/chat/completions', status: 200, latency_ms: 120, prompt_text: JSON.stringify({ messages: this.messages, stream: false, max_tokens: 500 }), masked_prompt: JSON.stringify({ messages: this.messages, stream: false, max_tokens: 500 }), model_response: JSON.stringify({ role: 'assistant', content: 'Готово. Проверена база db.internal.example.' }), intercepted_secrets: JSON.stringify([{ key: 'DB_HOST', alias: '$${<DB_HOST>}', realValue: 'db.internal.example' }]), timestamp: stamp });
+    this.host.seedTransaction({ id: 'desktop-tx', session_id: 'desktop-session-fixture', client: 'Desktop fixture', method: 'POST', url: '/' + routes[0].prefix + '/v1/chat/completions', status: 200, latency_ms: 120, prompt_text: JSON.stringify({ messages: this.messages, stream: false, max_tokens: 500 }), masked_prompt: JSON.stringify({ messages: this.messages, stream: false, max_tokens: 500 }), model_response: JSON.stringify({ role: 'assistant', content: 'Готово. Проверена база db.internal.example.' }), intercepted_secrets: JSON.stringify([{ key: 'DB_HOST', alias: '$${<DB_HOST>}', realValue: 'db.internal.example' }]), timestamp: stamp });
     this.browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
     this.context = await this.browser.newContext({ viewport: { width: 1440, height: 1000 } });
     await this.host.isolateClipboard(this.context);

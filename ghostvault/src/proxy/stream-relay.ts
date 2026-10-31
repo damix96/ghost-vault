@@ -16,7 +16,7 @@ export interface StreamIdentity {
 export class StreamRelay {
   constructor(private vault: Pick<VaultStore, 'getInboundReplacements' | 'unmaskInboundText'>, private hooks: HookManager, private events: EventBroadcaster, private windowSize: number) {}
 
-  public run = async (upstream: Response, reply: FastifyReply, context: ResponseContext, identity: StreamIdentity, onValue: (text: string) => void) => {
+  public run = async (upstream: Response, reply: FastifyReply, context: ResponseContext, identity: StreamIdentity, onValue: (text: string) => void, onProgress: (body: string, sample: string) => boolean = () => true) => {
     const transformer = new SseTransformer(this.vault, this.windowSize, onValue);
     const decoder = new TextDecoder();
     let accumulatedText = '';
@@ -31,9 +31,11 @@ export class StreamRelay {
       accumulatedText += hooked;
       if (!reply.raw.write(hooked)) await once(reply.raw, 'drain', { signal: AbortSignal.timeout(30000) });
       if (Date.now() - lastProgress < 250) return;
+      lastProgress = Date.now();
+      if (!onProgress(accumulatedText, sampleStreamChunk)) return;
       const normalized = ResponseNormalizer.normalize(accumulatedText);
       const preview = (normalized?.content || []).filter((block: any) => block.type === 'text').map((block: any) => block.text).join('');
-      this.events.broadcast({ id: identity.txId + '-progress-' + totalChunks, type: 'stream_progress', timestamp: new Date().toISOString(), client: identity.client, details: { sessionId: identity.sessionId, transactionId: identity.txId, text: preview.slice(-16000) } });
+      this.events.broadcast({ id: identity.txId + '-progress-' + totalChunks, type: 'stream_progress', timestamp: new Date().toISOString(), client: identity.client, details: { sessionId: identity.sessionId, transactionId: identity.txId, text: preview } });
       lastProgress = Date.now();
     };
     try {

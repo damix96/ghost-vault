@@ -130,8 +130,7 @@ class RedesignSmoke {
     assert.equal(saved.data.secrets[0].real_value, 'synthetic secret');
     assert.equal(await this.page.locator('[data-action="export-open"]').count(), 0);
     const stamp = new Date().toISOString();
-    this.host.database.upsertSession('saved-conversation', 'Fixture client');
-    this.host.database.saveTransaction({ id: 'legacy-call', session_id: 'saved-conversation', client: 'Fixture client', method: 'POST', url: '/openai/v1/chat/completions', status: 200, latency_ms: 5, prompt_text: 'original-only', masked_prompt: '', model_response: 'answer', intercepted_secrets: '[]', timestamp: stamp });
+    this.host.seedTransaction({ id: 'legacy-call', session_id: 'saved-conversation', client: 'Fixture client', method: 'POST', url: '/openai/v1/chat/completions', status: 200, latency_ms: 5, prompt_text: 'original-only', masked_prompt: '', model_response: 'answer', intercepted_secrets: '[]', timestamp: stamp });
     const legacy = await this.api('/api/sessions/saved-conversation');
     assert.equal(legacy[0].maskedPrompt, undefined);
     assert.equal(legacy[0].targetProvider ?? null, null);
@@ -157,8 +156,7 @@ class RedesignSmoke {
   isolation = async (firstId, secondId, alias, key) => {
     await this.api('/api/routes/' + secondId, { upstreamUrl: 'https://api.openai.com/v1' });
     const save = (id, session, url, body, timestamp) => {
-      this.host.database.upsertSession(session, 'Fixture');
-      this.host.database.saveTransaction({ id, session_id: session, client: 'Fixture', method: 'POST', url, status: 200, latency_ms: 1, prompt_text: JSON.stringify(body), masked_prompt: JSON.stringify(body), model_response: 'safe reply', intercepted_secrets: JSON.stringify([{ key, alias, realValue: 'synthetic secret' }]), timestamp, target_url: 'https://api.openai.com/v1/chat/completions' });
+      this.host.seedTransaction({ id, session_id: session, client: 'Fixture', method: 'POST', url, status: 200, latency_ms: 1, prompt_text: JSON.stringify(body), masked_prompt: JSON.stringify(body), model_response: 'safe reply', intercepted_secrets: JSON.stringify([{ key, alias, realValue: 'synthetic secret' }]), timestamp, target_url: 'https://api.openai.com/v1/chat/completions' });
     };
     const stamp = new Date().toISOString();
     save('second-call', 'second-conversation', '/alpha-team/chat/completions', { messages: [{ role: 'user', content: 'SECOND_ONLY ' + alias }] }, stamp);

@@ -4,7 +4,7 @@ import { VaultStore } from '../vault/store.js';
 import { PatternEngine } from '../vault/pattern-engine.js';
 import { PatternEditorApi } from './pattern-editor-api.js';
 import { RulePreviewApi } from './rule-preview-api.js';
-import { TransactionRow } from '../vault/sqlite-db.js';
+import { RuntimeSessions } from './runtime-sessions.js';
 import { HookManager } from '../hooks/manager.js';
 import { EventBroadcaster } from '../telemetry/event-broadcaster.js';
 import { HookSandbox } from '../telemetry/hook-sandbox.js';
@@ -48,39 +48,18 @@ export class DashboardApi {
     private setUpstreamSettings?: (s: { chatBase?: string; anthropicBase?: string }) => { chatBase: string; anthropicBase: string },
     private demoMode = false,
     private clearHistory: (sessionId?: string) => void = () => {},
-    private proxyConfig: Partial<GhostVaultConfig> = {}
+    private proxyConfig: Partial<GhostVaultConfig> = {},
+    private runtime = new RuntimeSessions()
   ) {
-    this.routeRegistry = new RouteRegistry(this.vault.getDatabase());
+    this.routeRegistry = new RouteRegistry(this.vault.getDatabase(), undefined, prefix => this.runtime.hasRoute(prefix));
   }
 
-  private safeJson = (val: string, fallback: any = val): any => {
-    try {
-      const parsed = JSON.parse(val);
-      if (parsed !== undefined) return parsed;
-    } catch {}
-    return fallback;
-  };
-
-  private mapDbTx = (row: TransactionRow): TransactionRecord => {
-    const targetUrl = row.target_url;
-    return {
-      id: row.id,
-      sessionId: row.session_id,
-      targetProvider: row.target_provider,
-      targetUrl,
-      latencyMs: row.latency_ms,
-      maskedPrompt: row.masked_prompt || undefined,
-      request: { method: row.method, url: row.url, targetUrl, headers: {}, body: this.safeJson(row.prompt_text), client: row.client },
-      response: { status: row.status, headers: {}, body: ResponseNormalizer.normalize(this.safeJson(row.model_response)), isStream: false, client: row.client },
-      interceptedSecrets: this.safeJson(row.intercepted_secrets, []),
-      timestamp: row.timestamp,
-    };
-  };
+  private runtimeRecord = (record: TransactionRecord): TransactionRecord => ({ ...record, response: record.response ? { ...record.response, body: ResponseNormalizer.normalize(record.response.body) } : undefined });
 
   private autoSecrets = () => this.vault.getAutoSecrets();
 
   public registerRoutes = (): void => {
-    new WorkspaceApi(this.app, this.vault.getDatabase(), this.hookManager, this.proxyConfig, this.vault).register();
+    new WorkspaceApi(this.app, this.vault.getDatabase(), this.hookManager, this.proxyConfig, this.vault, this.runtime).register();
     this.app.get('/dashboard', async (_, reply: FastifyReply) => reply.sendFile('index.html'));
 
     this.app.get('/health', async () => ({
@@ -118,25 +97,15 @@ export class DashboardApi {
       return reply.status(deleted ? 200 : 404).send({ success: deleted });
     });
 
-    this.app.get('/api/history', async () => {
-      const dbTxs = this.vault.getDatabase().getTransactions(50);
-      if (dbTxs.length > 0) {
-        return dbTxs.map(tx => ({
-          id: tx.id, timestamp: tx.timestamp, method: tx.method, url: tx.url, client: tx.client, secretCount: this.safeJson(tx.intercepted_secrets, []).length, latencyMs: tx.latency_ms, status: tx.status,
-        }));
-      }
-      return this.getTransactionHistory().map(tx => ({
-        id: tx.id, timestamp: tx.timestamp, method: tx.request.method, url: tx.request.url, client: tx.request.client, secretCount: tx.interceptedSecrets.length, latencyMs: tx.latencyMs ?? 0, status: tx.response?.status ?? 200,
-      }));
-    });
+    this.app.get('/api/history', async () => this.getTransactionHistory().map(tx => ({ id: tx.id, sessionId: tx.sessionId, timestamp: tx.timestamp, method: tx.request.method, url: tx.request.url, client: tx.request.client, secretCount: tx.interceptedSecrets.length, latencyMs: tx.latencyMs ?? 0, status: tx.response?.status, state: tx.state })));
+    this.app.get('/api/runtime-retention', async () => this.runtime.stats());
 
     this.app.get('/api/hooks/context', async (req: FastifyRequest<{ Querystring: { id?: string } }>) => {
       const targetId = req.query?.id;
       if (targetId) {
         const found = this.getTransactionById(targetId);
         if (found) return found;
-        const fromDb = this.vault.getDatabase().getTransaction(targetId);
-        return fromDb ? this.mapDbTx(fromDb) : { empty: true };
+        return { empty: true };
       }
       const latest = this.getLastTransactionContext();
       return latest || { empty: true };
@@ -155,43 +124,23 @@ export class DashboardApi {
       return reply.status(200).send(result);
     });
 
-    this.app.get('/api/sessions', async () =>
-      this.vault.getDatabase().getSessions().map(s => ({
-        id: s.id,
-        name: s.id,
-        endpoints: this.safeJson(s.endpoints || '[]', []),
-        client: s.client,
-        firstSeen: s.first_seen,
-        lastSeen: s.last_seen,
-        txCount: s.tx_count,
-        stepsCount: s.tx_count,
-        timestamp: s.last_seen,
-      }))
-    );
-
-    this.app.get('/api/sessions/:id', async (req: FastifyRequest<{ Params: { id: string } }>) =>
-      this.vault.getDatabase().getTransactionsBySession(req.params.id).map(this.mapDbTx)
-    );
-
-    this.app.get('/api/sessions/:id/full', async (req: FastifyRequest<{ Params: { id: string } }>) =>
-      SessionDialogue.buildChain(this.vault.getDatabase().getTransactionsBySession(req.params.id))
-    );
+    this.app.get('/api/sessions', async () => this.runtime.list());
+    this.app.get('/api/sessions/:id', async (req: FastifyRequest<{ Params: { id: string } }>) => this.runtime.bySession(req.params.id).map(this.runtimeRecord));
+    this.app.get('/api/sessions/:id/full', async (req: FastifyRequest<{ Params: { id: string } }>) => SessionDialogue.latest(this.runtime.bySession(req.params.id)[0]));
 
     this.app.delete('/api/sessions/:id', async (req: FastifyRequest<{ Params: { id: string } }>) => {
-      this.vault.getDatabase().deleteSession(req.params.id);
       this.clearHistory(req.params.id);
       return { success: true };
     });
 
     this.app.delete('/api/sessions', async () => {
-      this.vault.getDatabase().clearAllSessions();
       this.clearHistory();
       return { success: true, count: 0 };
     });
 
     this.app.get('/api/patterns', async () => this.patternEngine.getPatterns());
     new PatternEditorApi(this.app, this.patternEngine).register();
-    new RulePreviewApi(this.app, this.vault.getDatabase(), this.vault).register();
+    new RulePreviewApi(this.app, this.runtime, this.vault).register();
 
     this.app.delete('/api/patterns/:id', async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const deleted = this.patternEngine.deletePattern(req.params.id);

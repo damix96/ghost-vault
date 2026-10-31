@@ -20,6 +20,7 @@
     "demo": "node dist/demo.js",
     "zen": "node dist/zen.js",
     "test": "node dist/test-server.js && node dist/test-hooks.js && node dist/test-telemetry.js && node dist/test-mcp.js && node dist/test-sqlite-patterns.js && node dist/test-gateway-regressions.js && node dist/test-protocols.js && node dist/test-protocol-transport.js && node dist/test-protocol-streams.js && node dist/test-native-transport.js && node dist/test-composite-replacements.js && node dist/test-admin-regressions.js",
+    "test:retention": "node dist/test-runtime-retention.js && node dist/test-runtime-sessions-api.js",
     "test:labels": "node dist/test-secret-labels.js",
     "test:composite": "node dist/test-composite-replacements.js",
     "test:admin": "node dist/test-admin-regressions.js",

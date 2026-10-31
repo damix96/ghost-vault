@@ -177,7 +177,7 @@ export class GatewayRegressionTests {
       const payload = JSON.stringify({ model: 'chunked-test', messages: [{ role: 'user', content: 'echo ' + secret }] });
       const send = (body: string, chunked: boolean): Promise<{ status: number; body: string }> => new Promise((resolve, reject) => {
         const headers: Record<string, string | number> = {
-          'content-type': 'application/json', authorization: 'Bearer synthetic-chunked-test', 'x-preserve-header': 'preserved-value', connection: 'keep-alive, x-remove-hop', 'x-remove-hop': 'must-not-forward',
+          'content-type': 'application/json', 'x-session-id': chunked ? 'chunked-fixture' : 'fixed-fixture', authorization: 'Bearer synthetic-chunked-test', 'x-preserve-header': 'preserved-value', connection: 'keep-alive, x-remove-hop', 'x-remove-hop': 'must-not-forward',
         };
         if (!chunked) headers['content-length'] = Buffer.byteLength(body);
         const request = httpRequest({ hostname: proxyAddress.hostname, port: Number(proxyAddress.port), path: '/chunked-regression/v1/chat/completions', method: 'POST', headers }, response => {

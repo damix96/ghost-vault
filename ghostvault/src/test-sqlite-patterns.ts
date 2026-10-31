@@ -99,7 +99,7 @@ export class SqlitePatternsTestRunner {
     const sessionsRes = await fetch(baseUrl + '/api/sessions');
     const sessions = (await sessionsRes.json()) as any[];
     const session401 = sessions.find(s => s.id === 'test-session-401');
-    if (!session401) throw new Error('Expected test-session-401 to be recorded in SQLite');
+    if (!session401) throw new Error('Expected test-session-401 in runtime memory');
 
     const sessionTxsRes = await fetch(baseUrl + '/api/sessions/test-session-401');
     const sessionTxs = (await sessionTxsRes.json()) as any[];
@@ -132,7 +132,7 @@ export class SqlitePatternsTestRunner {
     if (!resolvedSession) throw new Error('Expected fingerprint-based session');
 
     const resolvedTxs = (await (await fetch(baseUrl + '/api/sessions/' + resolvedSession.id)).json()) as any[];
-    if (resolvedTxs.length < 2) throw new Error('Expected both steps grouped into same session');
+    if (resolvedTxs.length !== 1 || resolvedTxs[0].request.body.messages.length !== 3) throw new Error('Expected only latest call with its full three-message context');
     const contentBlocks = resolvedTxs[0].response?.body?.content || [];
     const textBlock = contentBlocks.find((b: any) => b.type === 'text');
     const toolBlock = contentBlocks.find((b: any) => b.type === 'tool_use');

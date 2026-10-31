@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { chromium } from 'playwright-core';
+import { UiTestHost } from './ui-test-host.mjs';
+
+class RuntimeSessionUiCheck {
+  host = new UiTestHost();
+  out = '../docs/ux-research/runtime-session-retention-20261101/frontend';
+  record = (id, text) => ({ id, sessionId: 'runtime-session', timestamp: new Date().toISOString(), request: { method: 'POST', url: this.endpoint, headers: {}, client: 'Fixture', body: { messages: [{ role: 'user', content: text + ' $${<HOST>}' }] } }, maskedPrompt: JSON.stringify({ messages: [{ role: 'user', content: text + ' $${<HOST>}' }] }), interceptedSecrets: [{ key: 'HOST', alias: '$${<HOST>}', realValue: 'fixture.local', count: 1, direction: 'outbound' }] });
+  event = (type, details) => this.host.server.getEventBroadcaster().broadcast({ id: crypto.randomUUID(), type, timestamp: new Date().toISOString(), client: 'Fixture', details });
+  run = async () => {
+    await mkdir(this.out, { recursive: true });
+    await this.host.init();
+    this.base = await this.host.app.listen({ port: 0, host: '127.0.0.1' });
+    const routes = await (await fetch(this.base + '/api/routes')).json();
+    this.endpoint = '/' + routes[0].prefix + '/v1/messages';
+    this.host.server.recordTransaction({ ...this.record('first', 'FIRST'), response: { status: 200, headers: {}, body: 'FIRST RESPONSE', isStream: false } });
+    this.browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+    this.page = await this.browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    await this.page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
+    this.page.setDefaultTimeout(10000);
+    await this.page.goto(this.base + '/dashboard');
+    await this.page.waitForFunction(() => window.app?.overview.step?.id === 'first' && window.app.overview.live);
+    const second = this.record('second', 'SECOND');
+    const active = this.host.server.getRuntimeSessions().begin(second);
+    this.event('request_started', { sessionId: 'runtime-session', transactionId: 'second', endpoint: this.endpoint });
+    await this.page.waitForFunction(() => window.app.overview.step?.id === 'second');
+    assert.match(await this.page.locator('.app-call-meta').innerText(), /Выполняется запрос/);
+    this.event('transaction_completed', { sessionId: 'runtime-session', transactionId: 'first', endpoint: this.endpoint, status: 500, latest: false });
+    await this.page.waitForTimeout(150);
+    assert.equal(await this.page.evaluate(() => window.app.overview.step.id), 'second');
+    assert.doesNotMatch(await this.page.locator('#overviewConversation').innerText(), /FIRST|HTTP 500/);
+    await this.page.screenshot({ path: this.out + '/active-call.png' });
+    const token = this.page.locator('.app-change-text [data-secret-key]').first();
+    await token.click();
+    assert.equal(await this.page.locator('.app-change-text gv-hint').first().evaluate(node => node.readState().pinned), true);
+    await fetch(this.base + '/api/sessions/runtime-session', { method: 'DELETE' });
+    await this.page.waitForFunction(() => window.app.overview.step === null);
+    assert.equal(await this.page.locator('.app-change-card').count(), 0);
+    assert.doesNotMatch(await this.page.locator('#overviewConversation').innerText(), /SECOND/);
+    active.end();
+    assert.equal((await (await fetch(this.base + '/api/sessions')).json()).length, 0);
+    this.host.server.recordTransaction(this.record('third', 'THIRD'));
+    await this.page.waitForFunction(() => window.app.overview.step?.id === 'third');
+    await fetch(this.base + '/api/sessions', { method: 'DELETE' });
+    await this.page.waitForFunction(() => window.app.overview.step === null);
+    await this.page.screenshot({ path: this.out + '/cleared-sessions.png' });
+    this.host.server.recordTransaction(this.record('fourth', 'FOURTH'));
+    await this.page.waitForFunction(() => window.app.overview.step?.id === 'fourth');
+    await this.page.locator('.app-change-text [data-secret-key]').first().click();
+    await this.page.evaluate(() => window.app.events.close());
+    this.host.server.clearTransactionHistory();
+    await this.page.evaluate(() => window.app.overview.refresh());
+    assert.equal(await this.page.evaluate(() => window.app.overview.step), null);
+    assert.equal(await this.page.locator('.app-change-card').count(), 0);
+    console.log('PASS runtime UI: active snapshot visible, superseded completion ignored, SSE delete clears pinned data, ended deleted call stays absent, clear-all removes display');
+  };
+  close = async () => { await this.browser?.close(); await this.host.close(); };
+}
+const check = new RuntimeSessionUiCheck();
+try { await check.run(); } finally { await check.close(); }

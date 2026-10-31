@@ -19,9 +19,8 @@ import { RouteRegistry } from './route-registry.js';
 import { PayloadCodec } from '../protocols/payload-codec.js';
 import { TextReplacer } from '../vault/text-replacer.js';
 import { UpstreamClient } from './upstream-client.js';
-import { RequestCapture } from './request-capture.js';
 import { AdminAccess } from './admin-access.js';
-import { HistoryRetention } from './history-retention.js';
+import { RuntimeSessions } from './runtime-sessions.js';
 
 const publicPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../public');
 
@@ -45,14 +44,9 @@ export class GhostProxyServer {
   private sessionResolver = new SessionResolver();
   private payloadCodec = new PayloadCodec();
   private upstreamClient = new UpstreamClient();
-  private requestCapture = new RequestCapture();
-  private historyRetention = new HistoryRetention();
+  private runtime = new RuntimeSessions(undefined, (sessionId, reason) => this.eventBroadcaster.broadcast({ id: crypto.randomUUID(), type: 'session_removed', timestamp: new Date().toISOString(), client: '', details: { sessionId, reason } }));
   private config: GhostVaultConfig;
   private startTime = Date.now();
-  private lastCall: LastCallInfo | null = null;
-  private lastTransactionContext: TransactionRecord | null = null;
-  private transactionHistory: TransactionRecord[] = [];
-  private activeSessionId = 'sess_' + Date.now().toString(36);
 
   constructor(vault?: VaultStore, config?: Partial<GhostVaultConfig>, hookManager?: HookManager) {
     this.vault = vault ?? new VaultStore();
@@ -62,20 +56,19 @@ export class GhostProxyServer {
     this.config = { port: 8765, host: '127.0.0.1', targetApiBase: 'https://api.anthropic.com', confirmationMode: 'auto', storagePath: '', maxBufferWindowChars: 64, ...config };
     if (this.config.hooksDir) this.hookManager.loadHooksFromDir(this.config.hooksDir);
     this.app = Fastify({ logger: false });
-    this.requestCapture.install(this.app);
     const adminAccess = new AdminAccess(this.config.host);
     adminAccess.install(this.app);
     this.app.register(cors, { delegator: adminAccess.cors });
     this.app.register(fastifyStatic, { root: publicPath, prefix: '/', wildcard: false, index: false });
     this.dashboardApi = new DashboardApi(
       this.app, this.vault, this.patternEngine, this.hookManager, this.eventBroadcaster, this.hookSandbox,
-      () => this.startTime, () => this.lastCall, () => this.lastTransactionContext,
-      () => this.transactionHistory, id => this.transactionHistory.find(tx => tx.id === id),
+      () => this.startTime, this.getLastCall, this.getLastTransactionContext,
+      this.getTransactionHistory, this.getTransactionById,
       record => this.recordTransaction(record),
       (direction, client, secret) => this.recordInterception(direction, client, secret),
       () => this.getUpstreamSettings(),
       (s: { chatBase?: string; anthropicBase?: string }) => this.setUpstreamSettings(s), this.config.demoMode,
-      this.clearTransactionHistory, this.config
+      this.clearTransactionHistory, this.config, this.runtime
     );
     this.dashboardApi.registerRoutes();
     this.app.route({ method: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'], url: '/*', handler: this.handleUniversalProxy });
@@ -86,55 +79,36 @@ export class GhostProxyServer {
   public getPatternEngine = (): PatternEngine => this.patternEngine;
   public getHookManager = (): HookManager => this.hookManager;
   public getEventBroadcaster = (): EventBroadcaster => this.eventBroadcaster;
-  public getLastCall = (): LastCallInfo | null => this.lastCall;
-  public getLastTransactionContext = (): TransactionRecord | null => this.lastTransactionContext;
-  public getTransactionHistory = (): TransactionRecord[] => this.transactionHistory;
-  public getTransactionById = (id: string): TransactionRecord | undefined =>
-    this.transactionHistory.find(tx => tx.id === id);
+  public getRuntimeSessions = (): RuntimeSessions => this.runtime;
+  public getLastCall = (): LastCallInfo | null => {
+    const record = this.getLastTransactionContext();
+    const secret = record?.interceptedSecrets.at(-1);
+    return record && secret ? { direction: secret.direction, client: record.request.client, timestamp: record.timestamp, rawUrl: secret.realValue, alias: secret.alias, key: secret.key } : null;
+  };
+  public getLastTransactionContext = (): TransactionRecord | null => this.runtime.records()[0] || null;
+  public getTransactionHistory = (): TransactionRecord[] => this.runtime.records();
+  public getTransactionById = (id: string): TransactionRecord | undefined => this.runtime.find(id);
   public getUpstreamSettings = () => new RouteRegistry(this.vault.getDatabase()).getSettings();
   public setUpstreamSettings = (settings: Record<string, string | undefined>) => new RouteRegistry(this.vault.getDatabase()).updateSettings(settings);
   public listen = async (): Promise<string> =>
     this.app.listen({ port: this.config.port, host: this.config.host });
-  public close = async (): Promise<void> => { this.eventBroadcaster.close(); await this.app.close(); };
+  public close = async (): Promise<void> => { this.eventBroadcaster.close(); await this.app.close(); this.runtime.clear(); };
 
   public clearTransactionHistory = (sessionId?: string): void => {
-    this.historyRetention.clear(sessionId);
-    this.transactionHistory = sessionId === undefined ? [] : this.transactionHistory.filter(record => record.sessionId !== sessionId);
-    this.lastTransactionContext = this.transactionHistory[0] || null;
-    this.lastCall = null;
+    this.runtime.clear(sessionId);
+    if (sessionId === undefined) this.eventBroadcaster.broadcast({ id: crypto.randomUUID(), type: 'sessions_cleared', timestamp: new Date().toISOString(), client: '', details: {} });
   };
 
   public recordTransaction = (record: TransactionRecord): void => {
-    this.lastTransactionContext = record;
-    this.transactionHistory.unshift(record);
-    if (this.transactionHistory.length > 50) this.transactionHistory.pop();
-    const promptText = typeof record.request.body === 'string' ? record.request.body : JSON.stringify(record.request.body ?? '');
-    const modelResponse = typeof record.response?.body === 'string' ? record.response.body : JSON.stringify(record.response?.body ?? record.sampleStreamChunk ?? '');
-    const sId = record.sessionId || this.activeSessionId;
-    this.vault.getDatabase().upsertSession(sId, record.request.client);
-    this.vault.getDatabase().saveTransaction({
-      id: record.id,
-      session_id: sId,
-      client: record.request.client,
-      method: record.request.method,
-      url: record.request.url,
-      status: record.response?.status ?? 200,
-      latency_ms: record.latencyMs ?? 0,
-      prompt_text: promptText,
-      masked_prompt: record.maskedPrompt || promptText,
-      model_response: modelResponse,
-      intercepted_secrets: JSON.stringify(record.interceptedSecrets),
-      timestamp: record.timestamp,
-      target_provider: record.targetProvider,
-      target_url: record.targetUrl || record.request.targetUrl,
-    });
-    this.eventBroadcaster.broadcast({ id: record.id, type: 'transaction_completed', timestamp: record.timestamp, client: record.request.client, details: { sessionId: sId, transactionId: record.id, status: record.response?.status, endpoint: record.request.url, targetUrl: record.targetUrl, latencyMs: record.latencyMs, secretCount: record.interceptedSecrets.length } });
+    this.runtime.record(record);
+    this.completed(record, true);
   };
+
+  private completed = (record: TransactionRecord, latest: boolean): void => this.eventBroadcaster.broadcast({ id: record.id, type: 'transaction_completed', timestamp: record.timestamp, client: record.request.client, details: { sessionId: record.sessionId || record.id, transactionId: record.id, latest, status: record.response?.status, endpoint: record.request.url, targetUrl: record.targetUrl, latencyMs: record.latencyMs, secretCount: record.interceptedSecrets.length } });
 
   public executeTestPing = (): TransactionRecord => this.dashboardApi.executeTestPing();
 
   private recordInterception = (direction: 'outbound' | 'inbound', client: string, secret: SecretEntry): void => {
-    this.lastCall = { direction, client, timestamp: new Date().toLocaleTimeString(), rawUrl: secret.realValue, alias: secret.alias, key: secret.key };
     this.eventBroadcaster.broadcast({
       id: crypto.randomUUID(),
       type: direction === 'outbound' ? 'outbound_masked' : 'inbound_unmasked',
@@ -170,15 +144,20 @@ export class GhostProxyServer {
       return;
     }
 
-    const txId = 'tx-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    const txId = crypto.randomUUID();
     const interceptedSecrets: SecretInterception[] = [];
     const userAgent = String(req.headers['user-agent'] || '');
     const clientName = req.url.includes('chat') ? 'OpenCode' : (userAgent.includes('Claude') ? 'Claude Code' : (userAgent.includes('Aider') ? 'Aider' : (userAgent.includes('Cursor') ? 'Cursor' : 'AI Client')));
     const sessionId = this.sessionResolver.resolveSessionId(req, clientName);
     const incomingUrl = req.url;
-    const retain = this.historyRetention.capture(sessionId);
-    const record = (transaction: TransactionRecord): void => { if (retain()) this.recordTransaction({ ...transaction, request: { ...transaction.request, url: incomingUrl } }); };
-    this.activeSessionId = sessionId;
+    const started = new Date().toISOString();
+    const call = this.runtime.begin({ id: txId, sessionId, timestamp: started, request: { method: req.method, url: incomingUrl, headers: req.headers as Record<string, string>, body: req.body, client: clientName }, interceptedSecrets: [] });
+    const retain = call.current;
+    let lastRecord: TransactionRecord | undefined;
+    const record = (transaction: TransactionRecord): void => {
+      lastRecord = { ...transaction, timestamp: started, request: { ...transaction.request, url: incomingUrl } };
+      call.update(lastRecord);
+    };
     this.eventBroadcaster.broadcast({ id: txId + '-start', type: 'request_started', timestamp: new Date().toISOString(), client: clientName, details: { sessionId, transactionId: txId, endpoint: req.url } });
 
     const headers: Record<string, string> = {};
@@ -188,6 +167,7 @@ export class GhostProxyServer {
     }
 
     let reqCtx: RequestContext = { method: req.method, url: req.url, headers, body: req.body, client: clientName };
+    try {
     reqCtx = await this.hookManager.runBeforeOutboundRequest(reqCtx);
 
     let inbound = this.vault.snapshot();
@@ -206,6 +186,7 @@ export class GhostProxyServer {
 
     if (maskedBody !== undefined && !reqCtx.headers['content-type']) reqCtx.headers['content-type'] = 'application/json';
 
+    record({ id: txId, sessionId, timestamp: started, request: reqCtx, maskedPrompt: maskedBody, interceptedSecrets });
     const upstream = this.getUpstreamSettings();
     const route = this.sessionResolver.resolveRoute(reqCtx.url, upstream, undefined, this.config.targetApiBase);
     reqCtx.url = route.forwardPath;
@@ -217,9 +198,9 @@ export class GhostProxyServer {
 
     let upstreamRes: Response;
     try {
-      upstreamRes = await this.requestCapture.send(req, txId, targetUrl, () => this.upstreamClient.fetch(targetUrl, { method: reqCtx.method, headers: reqCtx.headers, body: hasBody ? maskedBody : undefined, signal: disconnect.signal }));
+      upstreamRes = await this.upstreamClient.fetch(targetUrl, { method: reqCtx.method, headers: reqCtx.headers, body: hasBody ? maskedBody : undefined, signal: disconnect.signal });
     } catch (err: any) {
-      const errCtx: ResponseContext = { status: 502, headers: {}, body: String(err?.message || err), isStream: false, client: clientName };
+      const errCtx: ResponseContext = { status: reply.raw.destroyed ? 499 : 502, headers: {}, body: String(err?.message || err), isStream: false, client: clientName };
       record({ id: txId, sessionId, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: errCtx, interceptedSecrets, timestamp: new Date().toISOString(), latencyMs: Math.round(performance.now() - startPerf), maskedPrompt: maskedBody });
       reply.status(502).send({ error: 'Gateway upstream connection failed', details: String(err) });
       return;
@@ -243,7 +224,11 @@ export class GhostProxyServer {
 
     if (isSse) {
       const relay = new StreamRelay(inbound, this.hookManager, this.eventBroadcaster, this.config.maxBufferWindowChars);
-      const { accumulatedText, sampleStreamChunk, totalChunks } = await relay.run(upstreamRes, reply, resCtx, { txId, sessionId, client: clientName }, text => { if (retain()) this.checkAndRecord(text, clientName, interceptedSecrets, 'inbound'); });
+      const { accumulatedText, sampleStreamChunk, totalChunks } = await relay.run(upstreamRes, reply, resCtx, { txId, sessionId, client: clientName }, text => { if (retain()) this.checkAndRecord(text, clientName, interceptedSecrets, 'inbound'); }, (body, sampleStreamChunk) => {
+        if (!retain()) return false;
+        record({ id: txId, sessionId, timestamp: started, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: { ...resCtx, body }, maskedPrompt: maskedBody, interceptedSecrets, sampleStreamChunk });
+        return true;
+      });
       record({ id: txId, sessionId, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: resCtx, sampleStreamChunk, sampleStreamChunkIndex: 0, interceptedSecrets, timestamp: new Date().toISOString(), latencyMs: Math.round(performance.now() - startPerf), maskedPrompt: maskedBody });
       await this.hookManager.runAfterStream({ totalChunks, accumulatedText, client: clientName });
       return;
@@ -270,5 +255,13 @@ export class GhostProxyServer {
     }
 
     record({ id: txId, sessionId, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: resCtx, interceptedSecrets, timestamp: new Date().toISOString(), latencyMs: Math.round(performance.now() - startPerf), maskedPrompt: maskedBody });
+    } catch (error) {
+      record({ id: txId, sessionId, timestamp: started, request: reqCtx, interceptedSecrets, response: { status: reply.raw.destroyed ? 499 : Number((error as { statusCode?: number }).statusCode) || 500, headers: {}, body: { error: 'Gateway request failed' }, isStream: false, client: clientName }, latencyMs: Math.round(performance.now() - startPerf) });
+      throw error;
+    } finally {
+      const latest = retain();
+      call.end();
+      if (lastRecord) this.completed(lastRecord, latest && Boolean(this.runtime.find(txId)));
+    }
   };
 }

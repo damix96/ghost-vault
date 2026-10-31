@@ -14,14 +14,14 @@ export class RulePreview {
     this.api = api;
     this.host = host;
     this.read = read;
-    host.innerHTML = '<section class="app-rule-preview" aria-label="Проверка по сессиям"><h3>Совпадения в сессиях</h3><p class="app-help">Проверка черновика. Правило и секреты не изменяются.</p><details class="app-preview-context"><summary>Какие данные проверяются</summary><p class="app-help">По одному последнему сохранённому запросу каждой сессии, во всех подключениях. Исходящие поля проверяются целиком обработчиком протокола, до применения сохранённых секретов. Результаты загружаются порциями; остальные доступны через «Показать ещё».</p></details><p class="app-preview-status" role="status" aria-live="polite"></p><div class="app-preview-results"></div><button type="button" class="app-text-button" data-preview-more hidden>Показать ещё</button></section>';
+    host.innerHTML = '<section class="app-rule-preview" aria-label="Проверка по сессиям"><h3>Совпадения в сессиях</h3><p class="app-help">Проверка черновика. Правило и секреты не изменяются.</p><details class="app-preview-context"><summary>Какие данные проверяются</summary><p class="app-help">По одному последнему начатому запросу каждой сессии в памяти текущего процесса, во всех подключениях. Исходящие поля проверяются целиком обработчиком протокола, до применения сохранённых секретов. После перезапуска сессии исчезают. Результаты загружаются порциями; остальные доступны через «Показать ещё».</p></details><p class="app-preview-status" role="status" aria-live="polite"></p><div class="app-preview-results"></div><button type="button" class="app-text-button" data-preview-more hidden>Показать ещё</button></section>';
     this.status = host.querySelector('.app-preview-status');
     this.notice = document.createElement('p');
     this.notice.className = 'app-help app-preview-notice';
     this.status.after(this.notice);
     this.results = host.querySelector('.app-preview-results');
     this.more = host.querySelector('[data-preview-more]');
-    this.more.addEventListener('click', () => this.run(this.revision));
+    this.more.addEventListener('click', () => this.state ? this.run(this.revision) : this.schedule());
     host.addEventListener('toggle', event => {
       const details = event.target;
       if (!details.open || !details.hasAttribute('data-preview-context')) return;
@@ -64,6 +64,7 @@ export class RulePreview {
       while (!signal.aborted) {
         const data = await this.api.request('/api/pattern-preview', { method: 'POST', signal, body: JSON.stringify(state) });
         if (revision !== this.revision || signal.aborted) return;
+        state.revision = data.revision;
         for (const match of data.results) {
           if (match.labelNotice) this.notices.add(match.labelNotice);
           const contextId = String(this.contexts.size);
@@ -96,7 +97,15 @@ export class RulePreview {
       if (revision !== this.revision || signal.aborted) return;
       this.status.textContent = 'Проверка не завершена. ' + error.message;
       this.more.hidden = false;
-      this.more.textContent = 'Повторить проверку этой порции';
+      this.more.textContent = error.status === 409 ? 'Начать проверку заново' : 'Повторить проверку этой порции';
+      if (error.status === 409) {
+        this.state = null;
+        this.results.replaceChildren();
+        this.contexts.clear();
+        this.groups.clear();
+        this.notices.clear();
+        this.notice.textContent = '';
+      }
     } finally {
       if (revision === this.revision) this.more.disabled = false;
     }

@@ -13,6 +13,7 @@ import { PatternEditorApi } from './proxy/pattern-editor-api.js';
 import { RulePreviewApi } from './proxy/rule-preview-api.js';
 import { SlidingStreamTransformer } from './proxy/sliding-buffer.js';
 import { SseTransformer } from './proxy/sse-transformer.js';
+import { RuntimeSessions } from './proxy/runtime-sessions.js';
 import { GhostProxyServer } from './proxy/server.js';
 import { HookManager } from './hooks/manager.js';
 
@@ -114,7 +115,8 @@ class SecretLabelTests {
     const app = Fastify();
     const engine = new PatternEngine(this.db);
     new PatternEditorApi(app, engine).register();
-    new RulePreviewApi(app, this.db, this.vault).register();
+    const runtime = new RuntimeSessions();
+    new RulePreviewApi(app, runtime, this.vault).register();
     try {
       const input = { name: 'api-template', pattern: '(?<protocol>redis):([^ ]+)', type: 'uri', label_template: 'DB_$protocol_$2' };
       const created = await app.inject({ method: 'POST', url: '/api/patterns', payload: input });
@@ -125,8 +127,7 @@ class SecretLabelTests {
       assert.equal(updated.statusCode, 200);
       assert.equal((await app.inject({ method: 'PUT', url: '/api/patterns/' + current.id, payload: { ...current, baseline: current } })).statusCode, 409);
       assert.equal((await app.inject({ method: 'POST', url: '/api/patterns', payload: { ...input, label_template: '$missing' } })).statusCode, 400);
-      this.db.upsertSession('preview', 'synthetic');
-      this.db.saveTransaction({ id: 'preview-tx', session_id: 'preview', client: 'synthetic', method: 'POST', url: '/v1/chat/completions', status: 200, latency_ms: 1, prompt_text: JSON.stringify({ messages: [{ role: 'user', content: 'redis:synthetic' }] }), masked_prompt: '', model_response: '', intercepted_secrets: '[]', timestamp: new Date().toISOString() });
+      runtime.record({ id: 'preview-tx', sessionId: 'preview', request: { client: 'synthetic', method: 'POST', url: '/v1/chat/completions', headers: {}, body: { messages: [{ role: 'user', content: 'redis:synthetic' }] } }, interceptedSecrets: [], timestamp: new Date().toISOString() });
       const previewInput = { ...input, snapshot: new Date(Date.now() + 1000).toISOString() };
       const preview = await app.inject({ method: 'POST', url: '/api/pattern-preview', payload: previewInput });
       assert.equal(preview.statusCode, 200);

@@ -14,7 +14,7 @@ export class EventBroadcaster {
       'x-accel-buffering': 'no',
     });
     reply.raw.write(': connected\n\n');
-    const subscriber = (payload: string): boolean => reply.raw.write(payload);
+    const subscriber = (payload: string): void => { if (!reply.raw.write(payload)) reply.raw.destroy(); };
     this.subscribers.add(subscriber);
     this.clients.add(reply);
     const heartbeat = setInterval(() => reply.raw.write(': heartbeat\n\n'), 15000);

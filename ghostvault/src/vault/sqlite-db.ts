@@ -162,28 +162,6 @@ export class VaultDatabase {
   public getSession = (id: string): SessionRow | null =>
     (this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as unknown as SessionRow) || null;
 
-  public upsertSession = (id: string, client: string): SessionRow => {
-    const now = new Date().toISOString();
-    const existing = this.getSession(id);
-    if (!existing) {
-      const row: SessionRow = { id, client, first_seen: now, last_seen: now, tx_count: 1 };
-      this.db.prepare('INSERT INTO sessions (id, client, first_seen, last_seen, tx_count) VALUES (?, ?, ?, ?, ?)').run(id, client, now, now, 1);
-      return row;
-    }
-    const updated: SessionRow = { ...existing, client, last_seen: now, tx_count: existing.tx_count + 1 };
-    this.db.prepare('UPDATE sessions SET client = ?, last_seen = ?, tx_count = tx_count + 1 WHERE id = ?').run(client, now, id);
-    return updated;
-  };
-
-  public deleteSession = (sessionId: string): boolean => {
-    this.db.prepare('DELETE FROM transactions WHERE session_id = ?').run(sessionId);
-    return Number(this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId).changes) > 0;
-  };
-
-  public clearAllSessions = (): void => {
-    this.db.exec('DELETE FROM transactions; DELETE FROM sessions;');
-  };
-
   public getSetting = (key: string, fallback: string = ''): string => {
     const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
     return row ? row.value : fallback;
@@ -198,12 +176,6 @@ export class VaultDatabase {
     const res: Record<string, string> = {};
     for (const r of rows) res[r.key] = r.value;
     return res;
-  };
-
-  public saveTransaction = (row: TransactionRow): void => {
-    this.db.prepare(
-      'INSERT OR REPLACE INTO transactions (id, session_id, client, method, url, status, latency_ms, prompt_text, masked_prompt, model_response, intercepted_secrets, timestamp, target_provider, target_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(row.id, row.session_id, row.client, row.method, row.url, row.status, row.latency_ms, row.prompt_text, row.masked_prompt, row.model_response, row.intercepted_secrets, row.timestamp, row.target_provider || null, row.target_url || null);
   };
 
   public getTransactions = (limit: number = 50): TransactionRow[] =>

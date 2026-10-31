@@ -17,8 +17,7 @@ class RefinementCheck {
     this.base = await this.host.app.listen({ port: 0, host: '127.0.0.1' });
     const routes = await (await fetch(this.base + '/api/routes')).json();
     const messages = [{ role: 'user', content: 'https://alpha.example TOKEN_ABCDE' }, { role: 'assistant', content: 'Проверяю настройки' }, { role: 'user', content: 'Адрес $${<DB_HOST>}' }];
-    this.host.database.upsertSession('audit-session', 'Refinement fixture');
-    this.host.database.saveTransaction({ id: 'audit-tx', session_id: 'audit-session', client: 'Refinement fixture', method: 'POST', url: '/' + routes[0].prefix + '/v1/chat/completions', status: 200, latency_ms: 120, prompt_text: JSON.stringify({ messages, stream: true, max_tokens: 500 }), masked_prompt: JSON.stringify({ messages, stream: true, max_tokens: 500 }), model_response: JSON.stringify({ role: 'assistant', content: 'Ответ для db.internal.example' }), intercepted_secrets: JSON.stringify([{ key: 'DB_HOST', alias: '$${<DB_HOST>}', realValue: 'db.internal.example' }]), timestamp: stamp });
+    this.host.seedTransaction({ id: 'audit-tx', session_id: 'audit-session', client: 'Refinement fixture', method: 'POST', url: '/' + routes[0].prefix + '/v1/chat/completions', status: 200, latency_ms: 120, prompt_text: JSON.stringify({ messages, stream: true, max_tokens: 500 }), masked_prompt: JSON.stringify({ messages, stream: true, max_tokens: 500 }), model_response: JSON.stringify({ role: 'assistant', content: 'Ответ для db.internal.example' }), intercepted_secrets: JSON.stringify([{ key: 'DB_HOST', alias: '$${<DB_HOST>}', realValue: 'db.internal.example' }]), timestamp: stamp });
     this.browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
     this.context = await this.browser.newContext({ viewport: { width: 1440, height: 1000 } });
     await this.host.isolateClipboard(this.context);

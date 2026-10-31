@@ -32,7 +32,8 @@ export class UiTestHost {
       ]);
       this.database = new VaultDatabase(':memory:');
       seed(this.database);
-      this.app = new GhostProxyServer(new VaultStore(this.database), { port: 0 }).getApp();
+      this.server = new GhostProxyServer(new VaultStore(this.database), { port: 0 });
+      this.app = this.server.getApp();
       this.publicRoot = join(this.root, 'public');
     } catch (error) {
       await this.close();
@@ -40,8 +41,23 @@ export class UiTestHost {
     }
   };
 
+  seedTransaction = row => this.server.recordTransaction({
+    id: row.id, sessionId: row.session_id, timestamp: row.timestamp, latencyMs: row.latency_ms,
+    request: { method: row.method, url: row.url, headers: {}, client: row.client, body: UiTestHost.parse(row.prompt_text) },
+    response: { status: row.status, headers: {}, body: UiTestHost.parse(row.model_response), isStream: false },
+    maskedPrompt: row.masked_prompt || undefined, interceptedSecrets: JSON.parse(row.intercepted_secrets || '[]'),
+    targetUrl: row.target_url, targetProvider: row.target_provider,
+  });
+
+  static parse = text => {
+    let value = text;
+    try { value = JSON.parse(text); } catch {}
+    return value;
+  };
+
   close = async () => {
-    await this.app?.close();
+    if (this.server) await this.server.close();
+    else await this.app?.close();
     this.database?.close();
     if (this.temporary) {
       const target = await realpath(this.temporary);

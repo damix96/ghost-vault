@@ -16,7 +16,7 @@ export interface RouteDefinition {
 }
 
 export class RouteRegistry {
-  constructor(private db: VaultDatabase, private hostPort: string = 'http://127.0.0.1:8765') {}
+  constructor(private db: VaultDatabase, private hostPort: string = 'http://127.0.0.1:8765', private hasHistory: (prefix: string) => boolean = () => false) {}
 
   public static validateUrl = (value: string): string => {
     const url = new URL(value.trim());
@@ -33,7 +33,7 @@ export class RouteRegistry {
       const commandExample = r.id.startsWith('opencode') || r.prefix === 'ghostvault-test'
         ? JSON.stringify(OpenCodeConfig.create({ id: providerId, name: r.name + ' via GhostVault', baseUrl: cliUrl, modelId, ...(r.id === 'opencode' ? { canonical: 'opencode' } : {}), ...(providerId === 'ghostvault-test' ? { apiKey: 'local-test-only' } : {}) }), null, 2)
         : (r.id === 'anthropic' ? '$env:ANTHROPIC_BASE_URL="' + cliUrl + '"; claude' : '$env:OPENAI_BASE_URL="' + cliUrl + '"');
-      return { id: r.id, name: r.name, prefix: r.prefix, suffix, cliUrl, upstreamUrl: r.upstream_url, commandExample, description: r.description, isCustom: Boolean(r.is_custom), isUnusedPreset: new RouteAvailability(this.db).isUnusedPreset(r) };
+      return { id: r.id, name: r.name, prefix: r.prefix, suffix, cliUrl, upstreamUrl: r.upstream_url, commandExample, description: r.description, isCustom: Boolean(r.is_custom), isUnusedPreset: new RouteAvailability(this.db, this.hasHistory).isUnusedPreset(r) };
     });
 
   public getSettings = () => {
@@ -62,7 +62,7 @@ export class RouteRegistry {
     const prefix = data.prefix.trim().toLowerCase().replace(/^\/+|\/+$/g, '');
     if (!/^[a-z0-9-]+$/.test(prefix) || ['api', 'health', 'dashboard', 'zen'].includes(prefix)) throw new Error('Недопустимый префикс маршрута');
     const existing = this.db.getAllRoutes().find(r => r.prefix === prefix);
-    if (existing && !new RouteAvailability(this.db).isUnusedPreset(existing)) throw new Error('Этот префикс уже используется');
+    if (existing && !new RouteAvailability(this.db, this.hasHistory).isUnusedPreset(existing)) throw new Error('Этот префикс уже используется');
     const upstreamUrl = RouteRegistry.validateUrl(data.upstreamUrl);
     const name = data.name.trim();
     if (!name) throw new Error('Укажите название маршрута');

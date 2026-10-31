@@ -14,7 +14,9 @@ export class ApiClient {
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       const details = body.error?.fieldErrors ? Object.entries(body.error.fieldErrors).map(([field, errors]) => field + ': ' + errors.join(', ')).join('; ') : '';
-      throw new Error(typeof body.error === 'string' ? body.error : details || `HTTP ${res.status}`);
+      const error = new Error(typeof body.error === 'string' ? body.error : details || `HTTP ${res.status}`);
+      error.status = res.status;
+      throw error;
     }
     return res.json();
   };

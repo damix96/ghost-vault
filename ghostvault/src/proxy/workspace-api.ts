@@ -7,19 +7,19 @@ import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DefaultRoutes } from '../vault/default-routes.js';
+import { RuntimeSessions } from './runtime-sessions.js';
 import { GhostVaultConfig } from '../types/index.js';
 
 export class WorkspaceApi {
-  constructor(private app: FastifyInstance, private db: VaultDatabase, private hooks: HookManager, private proxyConfig: Partial<GhostVaultConfig>, private vault?: VaultStore) {}
+  constructor(private app: FastifyInstance, private db: VaultDatabase, private hooks: HookManager, private proxyConfig: Partial<GhostVaultConfig>, private vault?: VaultStore, private runtime = new RuntimeSessions()) {}
 
   private state = () => {
     const routes = this.db.getAllRoutes();
-    const history = this.db.getTransactions(1000);
     let saved: { visible?: string[]; selected?: string } = {};
     try { saved = JSON.parse(this.db.getSetting('dashboard_workspace', '{}')); } catch {}
     const known = new Set(routes.filter(route => {
       const original = DefaultRoutes.definitions.find(item => item[0] === route.id);
-      return route.is_custom || !original || route.upstream_url !== original[3] || route.name !== original[1] || history.some(tx => tx.url === '/' + route.prefix || tx.url.startsWith('/' + route.prefix + '/'));
+      return route.is_custom || !original || route.upstream_url !== original[3] || route.name !== original[1] || this.runtime.hasRoute(route.prefix);
     }).map(route => route.id));
     const visible = [...new Set(saved.visible || [...known])].filter(id => routes.some(route => route.id === id));
     return { visible, selected: visible.includes(saved.selected || '') ? saved.selected : visible[0] || '' };

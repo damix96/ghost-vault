@@ -5,11 +5,13 @@ import { HintLifecycle } from './hint-lifecycle.js';
 import { DisclosureState } from './disclosure-state.js';
 import { ReadingPosition } from './reading-position.js';
 import { TimelineNavigation } from './timeline-navigation.js';
+import { RuntimeSessionEvents } from './runtime-session-events.js';
 
 
 export class Overview {
   sessions = [];
   routes = [];
+  runtimeActivity = new Map();
   selectedSession = null;
   step = null;
   pending = new Map();
@@ -103,12 +105,13 @@ export class Overview {
     const details = event.details || {};
     const editing = this.app.connections.editor.isOpen();
     if (event.type === 'request_started') this.pending.set(details.transactionId, { started: Date.now(), route: this.routeFor(details.endpoint), session: details.sessionId });
+    RuntimeSessionEvents.handle(this, event);
     if (event.type === 'transaction_completed') {
       const route = this.pending.get(details.transactionId)?.route || this.routeFor(details.endpoint);
       this.pending.delete(details.transactionId);
-      if (route) this.results.set(route, { status: details.status, timestamp: event.timestamp });
+      if (route && details.latest !== false) this.results.set(route, { status: details.status, timestamp: event.timestamp });
       if (!editing && document.getElementById('overviewStream').dataset.transaction === details.transactionId) document.getElementById('overviewStream').hidden = true;
-      this.refresh();
+      if (details.latest !== false) this.refresh();
     }
     if (!editing && event.type === 'stream_progress' && details.sessionId === this.selectedSession && this.pending.get(details.transactionId)?.route === this.app.connections.workspace.selected && details.text) {
       const preview = document.getElementById('overviewStream');
@@ -157,15 +160,17 @@ export class Overview {
   renderActivity = () => {
     const recent = [...this.pending.values()].filter(item => item.route === this.app.connections.workspace.selected && Date.now() - item.started < 180000);
     const activity = document.getElementById('overviewActivity');
-    activity.hidden = !recent.length;
-    activity.textContent = `Выполняется запросов: ${recent.length}`;
+    const count = Math.max(recent.length, this.runtimeActivity.get(this.app.connections.workspace.selected) || 0);
+    activity.hidden = !count;
+    activity.textContent = `Выполняется запросов: ${count}`;
   };
 
   activity = route => {
     const pending = [...this.pending.values()].filter(item => item.route === route.id && Date.now() - item.started < 180000);
     const last = this.results.get(route.id);
     const parts = [];
-    if (pending.length) parts.push(this.live ? `Выполняется: ${pending.length}` : 'Обновление недоступно');
+    const count = Math.max(pending.length, this.runtimeActivity.get(route.id) || 0);
+    if (count) parts.push(this.live ? `Выполняется: ${count}` : 'Обновление недоступно');
     if (last) parts.push(`${last.status >= 400 ? 'Ошибка ' + last.status : last.status ? 'Ответ получен' : 'Результат неизвестен'} · ${new Date(last.timestamp).toLocaleTimeString()}`);
     return parts.join(' · ');
   };
@@ -179,12 +184,25 @@ export class Overview {
       const [health, sessions, routes] = await Promise.all([this.api.request('/health'), this.api.getSessions(), this.api.getRoutes()]);
       if (generation !== this.sessionGeneration || this.app.connections.editor.isOpen()) return;
       this.routes = routes;
+      this.runtimeActivity.clear();
+      for (const session of sessions) {
+        const route = this.routeFor(session.endpoints?.[0] || session.endpoint);
+        if (route) this.runtimeActivity.set(route, (this.runtimeActivity.get(route) || 0) + (session.activeCalls || 0));
+      }
       this.sessions = sessions.filter(session => (session.endpoints || [session.endpoint]).some(endpoint => this.routeFor(endpoint) === this.app.connections.workspace.selected)).sort((a, b) => new Date(b.lastSeen || b.timestamp) - new Date(a.lastSeen || a.timestamp));
       this.renderFirstRun();
       this.app.connections.setRoutes(routes);
       const preview = document.getElementById('overviewStream');
       if (preview.dataset.transaction && !this.pending.has(preview.dataset.transaction)) preview.hidden = true;
-      if (!this.sessions.some(session => session.id === this.selectedSession)) this.selectedSession = this.sessions[0]?.id || null;
+      if (!this.sessions.some(session => session.id === this.selectedSession)) {
+        this.pendingCall = null;
+        this.step = null;
+        this.signature = '';
+        this.expandedContexts.clear();
+        HintLifecycle.hide(document.getElementById('viewOverview'));
+        this.selectedSession = this.sessions[0]?.id || null;
+        this.renderConversation();
+      }
       const requestedSession = this.selectedSession;
       const steps = requestedSession ? await this.api.getSession(requestedSession) : [];
       if (generation !== this.sessionGeneration || requestedSession !== this.selectedSession || this.app.connections.editor.isOpen()) return;

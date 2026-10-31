@@ -9,15 +9,14 @@ class RulePreviewCheck {
 
   seed = (db, id, text) => {
     const stamp = new Date(Date.now() - 1000).toISOString();
-    db.upsertSession(id, 'Preview fixture');
-    db.saveTransaction({ id: id + '-tx', session_id: id, client: 'Preview fixture', method: 'POST', url: '/' + id + '/chat/completions', status: 200, latency_ms: 1, prompt_text: JSON.stringify({ model: 'METADATA_ONLY', messages: [{ role: 'user', content: text }] }), masked_prompt: '', model_response: '', intercepted_secrets: '[]', timestamp: stamp });
+    this.host.seedTransaction({ id: id + '-tx', session_id: id, client: 'Preview fixture', method: 'POST', url: '/' + id + '/chat/completions', status: 200, latency_ms: 1, prompt_text: JSON.stringify({ model: 'METADATA_ONLY', messages: [{ role: 'user', content: text }] }), masked_prompt: '', model_response: '', intercepted_secrets: '[]', timestamp: stamp });
   };
 
   run = async () => {
-    await this.host.init(db => {
-      for (let index = 0; index < 10; index++) this.seed(db, 'session-' + index, 'before TOKEN_ONE_' + index + ' middle TOKEN_TWO_' + index + ' after ::1 nope 8.8.8.8' + (index === 0 ? ' ' + 'Z'.repeat(1500) : ''));
-    });
-    this.host.database.saveTransaction({ id: 'old-tx', session_id: 'session-0', client: 'fixture', method: 'POST', url: '/session-0/chat/completions', status: 200, latency_ms: 1, prompt_text: JSON.stringify({ messages: [{ role: 'user', content: 'OLD_ONLY' }] }), masked_prompt: '', model_response: '', intercepted_secrets: '[]', timestamp: '2020-01-01T00:00:00.000Z' });
+    await this.host.init();
+    this.host.seedTransaction({ id: 'old-tx', session_id: 'session-0', client: 'fixture', method: 'POST', url: '/session-0/chat/completions', status: 200, latency_ms: 1, prompt_text: JSON.stringify({ messages: [{ role: 'user', content: 'OLD_ONLY' }] }), masked_prompt: '', model_response: '', intercepted_secrets: '[]', timestamp: '2020-01-01T00:00:00.000Z' });
+    for (let index = 0; index < 10; index++) this.seed(null, 'session-' + index, 'before TOKEN_ONE_' + index + ' middle TOKEN_TWO_' + index + ' after ::1 nope 8.8.8.8' + (index === 0 ? ' ' + 'Z'.repeat(1500) : ''));
+
     this.base = await this.host.app.listen({ host: '127.0.0.1', port: 0 });
     const before = this.host.database.getPatterns();
     const page = await (await this.preview({ pattern: 'TOKEN_ONE_\\d+' })).json();
@@ -26,7 +25,7 @@ class RulePreviewCheck {
     assert.equal(page.results.length, 1);
     assert.equal(page.results[0].path, 'request.messages[0].content');
     assert.equal(page.results[0].role, 'user');
-    const next = await (await this.preview({ pattern: 'TOKEN_ONE_\\d+', offset: page.next })).json();
+    const next = await (await this.preview({ pattern: 'TOKEN_ONE_\\d+', offset: page.next, revision: page.revision })).json();
     assert.equal(next.scanned, 1);
     const ips = await (await this.preview({ pattern: '::1|nope|8\\.8\\.8\\.8', anyIp: true })).json();
     assert.deepEqual([...new Set(ips.results.map(item => item.value))].sort(), ['8.8.8.8', '::1']);
@@ -78,11 +77,12 @@ class RulePreviewCheck {
     await this.page.keyboard.press('Escape');
     const completeText = 'CONTEXT_BEGIN ' + 'x'.repeat(140000) + ' ' + Array.from({ length: 65 }, (_, index) => 'COVER_' + String(index).padStart(3, '0')).join(' ') + ' ' + 'L'.repeat(2000) + ' CONTEXT_END';
     this.seed(this.host.database, 'session-coverage', completeText);
+    let coverageRevision = this.host.server.getRuntimeSessions().previewRevision();
     let coverageOffset = 10;
     let matchOffset = 0;
     const coverage = [];
     do {
-      const chunk = await (await this.preview({ pattern: 'COVER_\\d{3}|L{2000}', offset: coverageOffset, matchOffset })).json();
+      const chunk = await (await this.preview({ pattern: 'COVER_\\d{3}|L{2000}', offset: coverageOffset, matchOffset, revision: coverageRevision })).json();
       coverage.push(...chunk.results);
       assert.equal(chunk.contexts['request.messages[0].content'], completeText);
       matchOffset = chunk.matchOffset;
@@ -97,12 +97,19 @@ class RulePreviewCheck {
     await more.waitFor({ state: 'visible' });
     assert.equal(await this.page.locator('#patternForm .app-preview-match').count(), 60);
     assert.match(await this.page.locator('#patternForm .app-preview-status').innerText(), /не завершена/);
+    this.seed(null, 'session-changed', 'NO_MATCH');
+    await more.click();
+    await this.page.waitForFunction(() => document.querySelector('#patternForm [data-preview-more]').textContent === 'Начать проверку заново');
+    assert.equal(await this.page.locator('#patternForm .app-preview-match').count(), 0);
+    await more.click();
+    await this.page.waitForFunction(() => document.querySelectorAll('#patternForm .app-preview-match').length === 60);
     await more.click();
     await this.page.waitForFunction(() => document.querySelectorAll('#patternForm .app-preview-match').length === 66);
     assert.equal(await this.page.locator('#patternForm .app-preview-match').last().locator('gv-value').evaluate(node => node.value), 'L'.repeat(2000));
     const full = this.page.locator('#patternForm [data-preview-context]').first();
     await full.locator('xpath=..').locator(':scope > summary').click();
     await full.locator('summary').click();
+    await this.page.waitForFunction(() => document.querySelector('#patternForm [data-preview-context] pre').textContent.length > 140000);
     assert.equal(await full.locator('pre').textContent(), completeText);
     await this.page.keyboard.press('Escape');
     this.seed(this.host.database, 'aaa-stress', 'a'.repeat(60000) + '!');
