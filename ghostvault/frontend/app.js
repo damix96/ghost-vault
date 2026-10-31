@@ -14,6 +14,7 @@ import { DisclosureState } from './disclosure-state.js';
 import { RuleEditor } from './rule-editor.js';
 import { RelativeTime } from './relative-time.js';
 import { SecretNavigation } from './secret-navigation.js';
+import { ViewPreferences } from './view-preferences.js';
 
 export class DashboardApp {
   api = new ApiClient();
@@ -25,6 +26,7 @@ export class DashboardApp {
   connections = new Connections(this, this.api);
   activeMainTab = 'overview';
   mode = 'simple';
+  preferences = new ViewPreferences(this);
   refreshing = false;
   secretsSubTab = 'manual';
   manualSecrets = [];
@@ -47,6 +49,7 @@ export class DashboardApp {
     this.bindEvents();
     this.modals.init();
     this.overview.init();
+    this.preferences.init();
     await this.connections.init();
     this.utilities.init();
     this.feed.init();

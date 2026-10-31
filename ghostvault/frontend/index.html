@@ -14,7 +14,7 @@
       <gv-action id="navRulesBtn" label="Правила"></gv-action>
       <gv-action id="navSecretsBtn" label="Секреты"></gv-action>
     </nav>
-    <div class="app-header-tools"><gv-hint label="Связь со шлюзом" text="Связь этой страницы с GhostVault на вашем компьютере. Результат запроса к модели показан отдельно в сессии."><span id="gatewayStatus" tabindex="0" class="app-explained" role="status">Соединяемся…</span></gv-hint><gv-action id="exportAllBtn" label="Экспорт" size="compact"></gv-action></div>
+    <div class="app-header-tools"><span id="gatewayStatus" role="status" hidden></span><label class="app-interface-mode"><span>Простой</span><input id="interfaceMode" type="checkbox" role="switch" aria-label="Расширенный интерфейс"><span>Расширенный</span></label><gv-action id="exportAllBtn" label="Экспорт" size="compact"></gv-action></div>
   </header>
   <div id="startupError" role="alert" hidden></div>
   <main class="app-content">

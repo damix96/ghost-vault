@@ -20,7 +20,7 @@ export class Ui {
   static metric = (label, id, value, detail, detailId = '') => Ui.panel(label, `<gv-stack gap="small"><strong class="app-metric" id="${id}">${escapeHtml(value)}</strong><small${detailId ? ' id="' + detailId + '"' : ''}>${escapeHtml(detail)}</small></gv-stack>`);
   static toggle = (label, enabled, action, id, hint) => `<gv-action label="${escapeHtml(label)}" tone="${enabled ? 'primary' : 'neutral'}" ${actionAttributes(action, id)} hint="${escapeHtml(hint)}"></gv-action>`;
   static field = (id, label, value = '', attributes = '', hint = '') => `<gv-field id="${id}" name="${id}" label="${escapeHtml(label)}" value="${escapeHtml(value)}" initial="${escapeHtml(value)}" description="${escapeHtml(hint)}" ${attributes}></gv-field>`;
-  static message = (label, html, role = '', path = '') => `<article class="app-message" data-role="${escapeHtml(role || label)}" data-reading-key="${escapeHtml(path)}"><div class="app-message-role">${escapeHtml(label)}</div>${html}</article>`;
+  static message = (label, html, role = '', path = '') => `<article class="app-message" data-role="${escapeHtml(role || label)}" data-reading-key="${escapeHtml(path)}" data-timeline-item tabindex="-1"><div class="app-message-role">${escapeHtml(label)}</div>${path ? '<code class="app-message-path app-technical">' + escapeHtml(path) + '</code>' : ''}${html}</article>`;
   static tableEmpty = message => `<tr><td colspan="5">${Ui.empty(message)}</td></tr>`;
   static error = (id, message) => {
     const element = document.getElementById(id);

@@ -4,6 +4,7 @@ import { Ui } from './ui-components.js';
 import { HintLifecycle } from './hint-lifecycle.js';
 import { DisclosureState } from './disclosure-state.js';
 import { ReadingPosition } from './reading-position.js';
+import { TimelineNavigation } from './timeline-navigation.js';
 
 
 export class Overview {
@@ -24,6 +25,7 @@ export class Overview {
   pendingCall = null;
   callDetails = new DisclosureState();
   renderGeneration = 0;
+  expandedContexts = new Set();
 
   constructor(app, api) {
     this.app = app;
@@ -45,12 +47,8 @@ export class Overview {
       if (button) this.selectSession(button.dataset.sessionId);
     });
     document.getElementById('overviewConversation').addEventListener('click', event => {
-      const destination = event.target.closest('[data-reading-target]')?.dataset.readingTarget;
-      if (destination) {
-        const target = document.querySelector(`[data-reading-target-id="${destination}"]`);
-        target?.focus({ preventScroll: true });
-        target?.scrollIntoView({ block: 'start', behavior: 'instant' });
-      }
+      const edge = event.target.closest('[data-timeline-edge]')?.dataset.timelineEdge;
+      if (edge) TimelineNavigation.navigate(document.getElementById('overviewConversation'), edge);
       const button = event.target.closest('[data-content-mode]');
       if (button) {
         this.contentMode = button.dataset.contentMode;
@@ -60,11 +58,16 @@ export class Overview {
       }
       const context = event.target.closest('[data-context-toggle]');
       if (context) {
-        const body = context.nextElementSibling;
-        body.hidden = !body.hidden;
-        context.setAttribute('aria-expanded', String(!body.hidden));
-        context.textContent = body.hidden ? 'Показать контекст' : 'Скрыть контекст';
+        const key = context.dataset.contextToggle;
+        this.expandedContexts.has(key) ? this.expandedContexts.delete(key) : this.expandedContexts.add(key);
+        this.renderConversation(true);
+        [...document.querySelectorAll('[data-context-toggle]')].find(button => button.dataset.contextToggle === key)?.focus({ preventScroll: true });
       }
+    });
+    document.getElementById('overviewConversation').addEventListener('change', event => {
+      if (event.target.id !== 'messageOrder') return;
+      this.app.preferences.set('order', event.target.value);
+      document.getElementById('messageOrder')?.focus({ preventScroll: true });
     });
     document.getElementById('overviewConversation').addEventListener('gv-activate', event => {
       const mode = event.target.closest('[data-call-mode]')?.dataset.callMode;
@@ -124,6 +127,7 @@ export class Overview {
     this.pendingCall = null;
     HintLifecycle.hide(document.getElementById('viewOverview'));
     this.selectedSession = id;
+    this.expandedContexts.clear();
     this.sessionGeneration++;
     this.signature = '';
     this.step = null;
@@ -136,6 +140,7 @@ export class Overview {
     HintLifecycle.hide(document.getElementById('viewOverview'));
     this.sessionGeneration++;
     this.selectedSession = null;
+    this.expandedContexts.clear();
     this.pendingCall = null;
     this.step = null;
     this.signature = '';
@@ -236,12 +241,12 @@ export class Overview {
 
   renderRoutes = () => this.app.connections.renderBar();
 
-  renderConversation = (preserveReading = false) => {
+  renderConversation = (preserveReading = false, priorReading = null) => {
     const container = document.getElementById('overviewConversation');
-    const reading = preserveReading ? new ReadingPosition(container) : null;
+    const reading = priorReading || (preserveReading ? new ReadingPosition(container) : null);
     const generation = ++this.renderGeneration;
     const position = container.scrollTop;
-    this.callDetails.render(container, this.step ? LatestCallView.render(this.step, this.mode, [...this.app.manualSecrets, ...this.app.autoSecrets], this.contentMode, this.selectedSession || '') : OverviewView.empty());
+    this.callDetails.render(container, this.step ? LatestCallView.render(this.step, this.mode, [...this.app.manualSecrets, ...this.app.autoSecrets], this.contentMode, this.selectedSession || '', this.app.preferences, this.expandedContexts) : OverviewView.empty());
     container.querySelectorAll('[data-call-mode]').forEach(action => { action.pressed = action.dataset.callMode === this.mode; });
     container.scrollTop = position;
     if (reading) requestAnimationFrame(() => requestAnimationFrame(() => { if (generation === this.renderGeneration) reading.restore(); }));

@@ -7,7 +7,8 @@ export class TableRenderer {
   automatic = new DisclosureState();
   renderStatus = online => {
     const status = document.getElementById('gatewayStatus');
-    status.textContent = online ? 'GhostVault работает' : 'Нет связи с GhostVault';
+    status.hidden = online;
+    status.textContent = online ? '' : 'Нет связи с GhostVault';
   };
 
   renderManualRows = (secrets, query) => {

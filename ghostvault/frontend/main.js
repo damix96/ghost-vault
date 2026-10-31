@@ -4,6 +4,8 @@ import './dashboard.css';
 import './workspace.css';
 import './overview.css';
 import './management.css';
+import './typography.css';
+import './session-controls.css';
 import { DashboardApp } from './app.js';
 
 try {

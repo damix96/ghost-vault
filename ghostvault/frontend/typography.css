@@ -1,0 +1,42 @@
+:root {
+  --gv-font: "Segoe UI", system-ui, sans-serif;
+  --gv-font-mono: Consolas, ui-monospace, monospace;
+  --gv-size-page: 1.5rem;
+  --gv-size-heading: 1.125rem;
+  --gv-size-body: .9375rem;
+  --gv-size-label: .875rem;
+  --gv-size-secondary: .8125rem;
+  --gv-size-metadata: .75rem;
+  --wa-font-size-m: var(--gv-size-body);
+  --wa-font-size-s: var(--gv-size-label);
+}
+.dashboard { font-size: var(--gv-size-body); line-height: 1.6; }
+.dashboard code, .dashboard pre { font-family: var(--gv-font-mono); }
+.dashboard wa-button::part(base), .dashboard :is(input, textarea, select, .app-text-button, .app-save-button) { font-size: var(--gv-size-label); }
+.dashboard :is(.app-help, .app-muted, .app-fact, .app-record-meta, .app-record-footer > span, .app-secret-description, .app-session-time, .app-call-meta p, .app-preview-status) { font-size: var(--gv-size-secondary); line-height: 1.55; }
+.dashboard :is(.app-record-details > summary, .app-preview-context > summary, .app-rule-preview .app-preview-context > summary, .app-switch, .app-form-actions button, .app-rule-editor label:not(.app-switch)) { font-size: var(--gv-size-label); line-height: 1.45; }
+#viewSecrets .app-secret-card h3, #rulesList .app-rule h3 { font-size: var(--gv-size-label); line-height: 1.45; font-weight: 600; }
+.dashboard :is(.app-vault-value pre, .app-rule-expression, .app-preview-value code, .app-preview-alias code, .app-regex-input, .app-code, .app-variable-value code) { font: 400 var(--gv-size-label)/1.6 var(--gv-font-mono); }
+.app-vault-value > header, .app-expression-heading { font-size: var(--gv-size-secondary); }
+.dashboard .app-rule-preview :is(.app-help, .app-preview-alias > span, .app-preview-alias > .app-help) { font-size: var(--gv-size-secondary); line-height: 1.55; }
+.app-preview-group > header code { font: 400 var(--gv-size-metadata)/1.5 var(--gv-font-mono); }
+.app-chat .app-prose, .app-chat .app-change-text { font: 400 var(--gv-size-body)/1.6 var(--gv-font); max-width: 75ch; }
+.app-chat .app-instrument-text, .app-chat [data-content-kind="code"] .app-change-text { font: 400 var(--gv-size-label)/1.6 var(--gv-font-mono); max-width: none; white-space: pre-wrap; }
+.app-chat .app-message-role, .app-change-card header strong { color: var(--gv-text); font-size: var(--gv-size-label); line-height: 1.45; font-weight: 600; }
+.app-chat .app-change-card header code { color: var(--gv-muted); font: 400 var(--gv-size-metadata)/1.5 var(--gv-font-mono); }
+.app-chat .app-explained { font-family: var(--gv-font-mono); }
+.app-chat-toolbar .app-view-modes button, .app-source-label { font-size: var(--gv-size-label); }
+.app-current-session, .app-connection-address { color: var(--gv-text); font: 400 var(--gv-size-label)/1.6 var(--gv-font-mono); }
+.app-session-choice .app-session-id { color: var(--gv-text); font: 600 var(--gv-size-secondary)/1.5 var(--gv-font-mono); }
+.app-session-choice > span { font-size: var(--gv-size-secondary); color: var(--gv-muted); }
+.app-call-secrets .app-variable-name { font: 400 var(--gv-size-secondary)/1.55 var(--gv-font-mono); }
+.app-call-secrets :is(.app-variable-count, .app-variable-value header span, .app-variables-help, .app-variable-total) { font-size: var(--gv-size-secondary); line-height: 1.55; color: var(--gv-muted); }
+.app-variables-heading h3 { font-size: var(--gv-size-label); line-height: 1.45; }
+.app-response-heading h3, .app-rule-preview > h3 { font-size: var(--gv-size-heading); line-height: 1.35; font-weight: 600; }
+.app-condition { color: var(--gv-text); font-size: var(--gv-size-label); line-height: 1.5; margin: .5rem 0; }
+.app-condition strong { display: block; font-weight: 600; margin-bottom: .25rem; }
+.app-rule-editor { gap: 1.25rem; }
+.app-rule-editor label:not(.app-switch) { gap: .4rem; }
+.app-rule-editor .app-help { margin: -.65rem 0 0; }
+.app-form-actions { gap: .75rem; }
+.app-variable-count, .app-variable-total, .app-fact { font-variant-numeric: tabular-nums; }

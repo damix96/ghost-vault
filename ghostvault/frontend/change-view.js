@@ -1,8 +1,9 @@
 import { escapeHtml } from './utils.js';
 import { Ui } from './ui-components.js';
+import { MessageOrder } from './message-order.js';
 
 export class ChangeView {
-  constructor(display) { this.display = display; }
+  constructor(display, order = 'oldest', expanded = new Set()) { this.display = display; this.order = order; this.expanded = expanded; }
 
   render = body => {
     if (body === undefined) return Ui.empty('Это представление запроса не сохранено.');
@@ -19,12 +20,17 @@ export class ChangeView {
           else windows.push({ start, end });
         }
         if (!windows.length) return;
-        const snippets = windows.map(({ start, end }) => '<p class="app-change-text">' + (start ? '…' : '') + this.display.render(value.slice(start, end)) + (end < value.length ? '…' : '') + '</p>').join('');
-        const readingKey = path.replace(/\[(\d+)\]/g, '.$1').replace(/\.(content|text)$/, '');
-        cards.push(`<article class="app-change-card" data-reading-key="${escapeHtml(readingKey)}"><header><strong>${escapeHtml(role || 'Поле запроса')}</strong><code>${escapeHtml(path)}</code></header>${snippets}<button type="button" class="app-text-button" data-context-toggle aria-expanded="false">Показать контекст</button><div class="app-context app-prose" hidden>${this.display.render(value)}</div></article>`);
-      } else if (Array.isArray(value)) value.forEach((item, index) => visit(item, path + '[' + index + ']', role));
+        const truncated = windows.length !== 1 || windows[0].start !== 0 || windows[0].end !== value.length;
+        const expanded = truncated && this.expanded.has(path);
+        const snippets = expanded ? '<p class="app-change-text">' + this.display.render(value) + '</p>' : windows.map(({ start, end }) => '<p class="app-change-text">' + (start ? '…' : '') + this.display.render(value.slice(start, end)) + (end < value.length ? '…' : '') + '</p>').join('');
+        const call = /tool_calls|function_call|functionCall|\.arguments$/.test(path);
+        const output = ['tool', 'function'].includes(role) || path.includes('functionResponse');
+        const label = call ? 'Вызов инструмента' : output ? 'Результат инструмента' : ({ user: 'Пользователь', assistant: 'Ассистент', model: 'Ассистент', system: 'Система', developer: 'Разработчик' }[role] || role || 'Поле запроса');
+        const toggle = truncated ? `<button type="button" class="app-text-button" data-context-toggle="${escapeHtml(path)}" aria-expanded="${expanded}">${expanded ? 'Свернуть до мест замен' : 'Показать поле целиком'}</button>` : '';
+        cards.push(`<article class="app-change-card" data-reading-key="${escapeHtml(path)}" data-timeline-item tabindex="-1" data-content-kind="${call || output ? 'code' : 'prose'}"><header><strong>${escapeHtml(label)}</strong><code class="app-technical">${escapeHtml(path)}</code></header>${snippets}${toggle}</article>`);
+      } else if (Array.isArray(value)) MessageOrder.ordered(value, path, this.order).forEach(({ value: item, index }) => visit(item, path + '[' + index + ']', role));
       else if (value && typeof value === 'object') {
-        const label = { user: 'Пользователь', assistant: 'Ассистент', system: 'Система', developer: 'Разработчик', tool: 'Инструмент' }[value.role] || value.role || role;
+        const label = value.role || role;
         Object.entries(value).forEach(([key, item]) => visit(item, path ? path + '.' + key : key, label));
       }
     };

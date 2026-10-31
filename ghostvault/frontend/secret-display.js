@@ -25,8 +25,9 @@ export class SecretDisplay {
     for (const token of value.matchAll(this.matcher())) {
       html += escapeHtml(value.slice(offset, token.index));
       const entry = this.aliases.get(token[0]);
-      const hint = entry ? 'Было' + (entry.format === 'Обычный текст' ? '' : ' · ' + entry.format) + ': ' + (entry.value === '' ? '(пустая строка)' : entry.value) + '\nУшло: ' + token[0] : 'Значение для этой подстановки отсутствует в списке секретов.';
-      html += Ui.explain(token[0], hint, entry?.value, entry?.secret.key);
+      const hint = entry ? 'Было' + (entry.format === 'Обычный текст' ? '' : ' · ' + entry.format) + ': ' + (entry.value === '' ? '(пустая строка)' : entry.value) + '\nУшло: ' + token[0] : 'Нет известного соответствия. Это может быть буквальный текст в форме подстановки, а не обработанный секрет.';
+      const tokenHtml = Ui.explain(token[0], hint, entry?.value, entry?.secret.key);
+      html += entry ? tokenHtml : '<span class="app-unknown-alias">' + tokenHtml + '</span>';
       offset = token.index + token[0].length;
     }
     return html + escapeHtml(value.slice(offset));
@@ -37,8 +38,7 @@ export class SecretDisplay {
     const visit = value => {
       if (typeof value === 'string') {
         for (const match of value.matchAll(this.matcher())) {
-          const entry = this.aliases.get(match[0]);
-          if (entry) result.set(match[0], (result.get(match[0]) || 0) + 1);
+          result.set(match[0], (result.get(match[0]) || 0) + 1);
         }
       } else if (Array.isArray(value)) value.forEach(visit);
       else if (value && typeof value === 'object') Object.values(value).forEach(visit);
