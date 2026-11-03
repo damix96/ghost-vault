@@ -1,5 +1,4 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { VaultStore } from '../vault/store.js';
 import { PatternEngine } from '../vault/pattern-engine.js';
 import { PatternEditorApi } from './pattern-editor-api.js';
@@ -16,16 +15,7 @@ import { RouteRegistry } from './route-registry.js';
 import { DashboardDemo } from './dashboard-demo.js';
 import { SessionDialogue } from './session-dialogue.js';
 import { WorkspaceApi } from './workspace-api.js';
-
-const secretSchema = z.object({
-  key: z.string().min(1),
-  realValue: z.string().min(1),
-  description: z.string().optional(),
-});
-
-const promoteSchema = z.object({
-  key: z.string().min(1),
-});
+import { VariableApi } from './variable-api.js';
 
 export class DashboardApi {
   private routeRegistry: RouteRegistry;
@@ -60,6 +50,7 @@ export class DashboardApi {
 
   public registerRoutes = (): void => {
     new WorkspaceApi(this.app, this.vault.getDatabase(), this.hookManager, this.proxyConfig, this.vault, this.runtime).register();
+    new VariableApi(this.app, this.vault).register();
     this.app.get('/dashboard', async (_, reply: FastifyReply) => reply.sendFile('index.html'));
 
     this.app.get('/health', async () => ({
@@ -76,26 +67,6 @@ export class DashboardApi {
       lastCall: this.getLastCall(),
       retention: this.vault.getRetention(),
     }));
-
-    this.app.post('/api/vault/secret', async (req: FastifyRequest, reply: FastifyReply) => {
-      const parsed = secretSchema.safeParse(req.body);
-      if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
-      const entry = this.vault.setManualSecret(parsed.data.key, parsed.data.realValue, parsed.data.description);
-      return reply.status(200).send({ success: true, secret: entry });
-    });
-
-    this.app.post('/api/vault/promote', async (req: FastifyRequest, reply: FastifyReply) => {
-      const parsed = promoteSchema.safeParse(req.body);
-      if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
-      const entry = this.vault.promote(parsed.data.key);
-      if (!entry) return reply.status(404).send({ error: 'Secret not found in auto vault' });
-      return reply.status(200).send({ success: true, secret: entry });
-    });
-
-    this.app.delete('/api/vault/secret/:key', async (req: FastifyRequest<{ Params: { key: string } }>, reply: FastifyReply) => {
-      const deleted = this.vault.deleteSecret(req.params.key);
-      return reply.status(deleted ? 200 : 404).send({ success: deleted });
-    });
 
     this.app.get('/api/history', async () => this.getTransactionHistory().map(tx => ({ id: tx.id, sessionId: tx.sessionId, timestamp: tx.timestamp, method: tx.request.method, url: tx.request.url, client: tx.request.client, secretCount: tx.interceptedSecrets.length, latencyMs: tx.latencyMs ?? 0, status: tx.response?.status, state: tx.state })));
     this.app.get('/api/runtime-retention', async () => this.runtime.stats());

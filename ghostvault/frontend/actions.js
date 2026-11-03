@@ -5,6 +5,7 @@ export class DashboardActions {
       ['secret-copy', value => app.copyText(value)],
       ['token-copy', value => app.copyText(value)],
       ['secret-edit', key => app.openModal(key)],
+      ['secret-rename', (key, trigger) => app.secretRename.open(key, trigger)],
       ['secret-delete', key => app.handleDeleteSecret(key)],
       ['secret-promote', key => app.handlePromoteByKey(key)],
       ['pattern-toggle', id => app.handleTogglePattern(id)],

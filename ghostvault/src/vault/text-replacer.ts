@@ -16,7 +16,10 @@ export class TextReplacer {
     const candidates: Replacement[] = [];
     for (const secret of secrets) {
       if (!secret.maskInAi) continue;
+      const seen = new Set<string>();
       for (const { value: variant, alias } of representations(secret)) {
+        if (!variant || seen.has(variant)) continue;
+        seen.add(variant);
         let offset = 0;
         while ((offset = text.indexOf(variant, offset)) >= 0) {
           candidates.push({ start: offset, end: offset + variant.length, alias });

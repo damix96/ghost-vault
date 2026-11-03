@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { DefaultRoutes } from './default-routes.js';
 import { AliasRegistry } from './alias-registry.js';
+import { ManualBindings } from './manual-bindings.js';
+import { ArchivedRepresentations } from './archived-representations.js';
 import { RuntimeLease } from './runtime-lease.js';
 
 import { SecretRow, AutoSecretRow, PatternRow, SessionRow, TransactionRow, RouteRow } from './database-types.js';
@@ -12,11 +14,14 @@ export type { SecretRow, AutoSecretRow, PatternRow, SessionRow, TransactionRow, 
 export class VaultDatabase {
   private db: DatabaseSync;
   public aliases: AliasRegistry;
+  public manualBindings: ManualBindings;
+  public archivedRepresentations: ArchivedRepresentations;
   private lease: RuntimeLease;
   public claimRuntime = (): void => this.lease.acquire();
   public getVersions = (): SecretRow[] => this.db.prepare('SELECT * FROM secret_versions').all() as unknown as SecretRow[];
   public archiveSecret = (key: string): void => { this.db.prepare('INSERT INTO secret_versions SELECT * FROM secrets WHERE key = ?').run(key); };
   public deleteVersions = (key: string): void => { this.db.prepare('DELETE FROM secret_versions WHERE key = ?').run(key); };
+  public renameVersions = (key: string, name: string): void => { this.db.prepare('UPDATE secret_versions SET key = ? WHERE key = ?').run(name, key); };
 
   constructor(customPath?: string) {
     const dbPath = customPath || process.env.GHOSTVAULT_DB_PATH || path.join(os.homedir(), '.ghostvault', 'vault.db');
@@ -28,6 +33,8 @@ export class VaultDatabase {
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.createTables();
     this.aliases = new AliasRegistry(this.db);
+    this.manualBindings = new ManualBindings(this.db, this.aliases);
+    this.archivedRepresentations = new ArchivedRepresentations(this.db, this.aliases);
     this.lease = new RuntimeLease(dbPath === ':memory:' ? dbPath : fs.realpathSync(dbPath));
     this.db.exec('CREATE TABLE IF NOT EXISTS secret_versions AS SELECT * FROM secrets WHERE 0;');
     if (!this.db.prepare('PRAGMA table_info(patterns)').all().some(row => row.name === 'label_template')) this.db.exec('ALTER TABLE patterns ADD COLUMN label_template TEXT;');

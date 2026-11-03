@@ -1,32 +1,23 @@
 import path from 'node:path';
-import { GhostProxyServer } from './proxy/server.js';
-import { RouteRegistry } from './proxy/route-registry.js';
-import { VaultDatabase } from './vault/sqlite-db.js';
-import { VaultStore } from './vault/store.js';
+import { RuntimeCli } from './runtime/cli.js';
+import { RuntimeLauncher } from './runtime/launcher.js';
+import { RuntimeOptions, RuntimeSettings } from './runtime/settings.js';
 
 export class ZenGateway {
-  private port = Number(process.env.GHOSTVAULT_PORT ?? 8765);
-  private database = new VaultDatabase(path.resolve(process.cwd(), '.cache/zen-live.db'));
-  private vault = new VaultStore(this.database);
-  private server = new GhostProxyServer(this.vault, { host: '127.0.0.1', port: this.port });
+  private launcher: RuntimeLauncher;
 
-  public start = async (): Promise<void> => {
-    if (!Number.isInteger(this.port) || this.port < 1 || this.port > 65535) throw new Error('Invalid GHOSTVAULT_PORT');
-    await this.server.listen();
-    console.log('GhostVault cloud gateway: http://127.0.0.1:' + this.port + '/dashboard');
-    console.log('OpenCode provider: ghostvault-zen');
-    console.log('Upstream: ' + new RouteRegistry(this.database).getSettings().opencode);
-    console.log('Database: .cache/zen-live.db; no mock server.');
-  };
+  constructor(options: RuntimeOptions = {}) {
+    const databasePath = options.databasePath ?? (options.dataDir || process.env.GHOSTVAULT_DATA_DIR ? undefined : process.env.GHOSTVAULT_DB_PATH ?? path.resolve(process.cwd(), '.cache/zen-live.db'));
+    this.launcher = new RuntimeLauncher(new RuntimeSettings({ ...options, databasePath }));
+  }
 
-  public stop = async (): Promise<void> => {
-    await this.server.close();
-    this.database.close();
-    process.exit(0);
-  };
+  public start = async (): Promise<void> => { console.log(JSON.stringify(await this.launcher.ensure())); };
+  public stop = async (): Promise<void> => { await this.launcher.stop(); };
 }
 
-const gateway = new ZenGateway();
-process.once('SIGINT', gateway.stop);
-process.once('SIGTERM', gateway.stop);
-gateway.start().catch(error => { console.error(error); process.exit(1); });
+if (RuntimeCli.isMain(import.meta.url)) {
+  const args = process.argv.slice(2);
+  const explicitData = args.includes('--data-dir') || args.some(arg => arg.startsWith('--data-dir=')) || process.env.GHOSTVAULT_DATA_DIR;
+  const databasePath = explicitData ? undefined : process.env.GHOSTVAULT_DB_PATH ?? path.resolve(process.cwd(), '.cache/zen-live.db');
+  RuntimeCli.main(args, { databasePath });
+}

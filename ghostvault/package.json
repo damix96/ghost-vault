@@ -5,27 +5,45 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "ghostvault": "dist/index.js"
+    "ghostvault": "dist/runtime/cli.js"
   },
   "scripts": {
     "build": "npm run build:ui && tsc",
     "build:ui": "npm --prefix ../ui-kit run build && vite build",
     "build:ui:stage": "npm --prefix ../ui-kit run build && vite build --outDir ../../.cache/ghostvault-ui-release",
-    "setup": "npm --prefix ../ui-kit ci && npm ci",
+    "setup": "node dist/runtime/cli.js setup",
+    "setup:dev": "npm --prefix ../ui-kit ci && npm ci",
     "check:ui": "node scripts/check-ui.mjs",
     "smoke:ui": "node scripts/smoke-redesign.mjs",
     "smoke:first-run": "node scripts/smoke-redesign.mjs",
-    "start": "node dist/index.js",
+    "start": "node dist/runtime/cli.js start",
+    "ensure-start": "node dist/runtime/cli.js ensure-start",
+    "status": "node dist/runtime/cli.js status",
+    "stop": "node dist/runtime/cli.js stop",
     "dev": "tsx watch src/index.ts",
     "demo": "node dist/demo.js",
     "zen": "node dist/zen.js",
-    "test": "node dist/test-server.js && node dist/test-hooks.js && node dist/test-telemetry.js && node dist/test-mcp.js && node dist/test-sqlite-patterns.js && node dist/test-gateway-regressions.js && node dist/test-protocols.js && node dist/test-protocol-transport.js && node dist/test-protocol-streams.js && node dist/test-native-transport.js && node dist/test-composite-replacements.js && node dist/test-admin-regressions.js",
-    "test:retention": "node dist/test-runtime-retention.js && node dist/test-runtime-sessions-api.js",
-    "test:labels": "node dist/test-secret-labels.js",
-    "test:composite": "node dist/test-composite-replacements.js",
-    "test:admin": "node dist/test-admin-regressions.js",
+    "test": "node scripts/run-tests.mjs",
+    "test:retention": "node scripts/run-tests.mjs test-runtime-retention test-runtime-sessions-api",
+    "test:labels": "node scripts/run-tests.mjs test-secret-labels",
+    "test:composite": "node scripts/run-tests.mjs test-composite-replacements",
+    "test:admin": "node scripts/run-tests.mjs test-admin-regressions",
     "test:e2e": "node dist/e2e-runner.js",
-    "mcp": "node dist/mcp/index.js"
+    "mcp": "node dist/mcp/index.js",
+    "mcp:bridge": "node dist/runtime/cli.js mcp-bridge",
+    "test:mcp:catalog": "tsx src/test-mcp-catalog.ts",
+    "test:mcp:http": "tsx src/test-mcp-http.ts",
+    "test:mcp:agent": "npm run test:mcp:catalog && npm run test:mcp:http && npm run test:mcp:vault",
+    "test:mcp:vault": "tsx src/test-mcp-vault.ts",
+    "stage:release": "node scripts/stage-release.mjs",
+    "prepack": "npm run build",
+    "test:runtime": "node dist/runtime/test-listener.js && node dist/runtime/test-processes.js && node dist/runtime/test-paths.js && node dist/runtime/test-drain.js && node dist/runtime/test-timeout.js && node dist/runtime/test-integration.js",
+    "test:setup": "node dist/setup/test-setup.js && node dist/setup/test-autostart.js",
+    "test:mcp:bridge": "node dist/test-mcp-bridge.js",
+    "test:variables": "node scripts/run-tests.mjs test-mutable-variables test-variable-migration test-variable-reclaim test-variable-requests test-variable-export test-secret-labels",
+    "test:all": "npm test && npm run test:variables && npm run test:mcp:agent && npm run test:mcp:bridge && npm run test:runtime && npm run test:shutdown && npm run test:setup && npm run test:retention",
+    "verify:release": "node scripts/verify-release.mjs",
+    "test:shutdown": "node dist/runtime/test-shutdown-network.js && node dist/runtime/test-shutdown-hooks.js && node dist/runtime/test-shutdown-backpressure.js"
   },
   "keywords": [
     "ai",
@@ -42,20 +60,46 @@
     "@eslint-community/regexpp": "^4.12.2",
     "@fastify/cors": "^10.1.0",
     "@fastify/static": "^10.1.5",
-    "@ghostvault/ui-kit": "file:../ui-kit",
-    "@modelcontextprotocol/sdk": "^1.6.1",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "eventsource-parser": "^4.1.1",
     "fastify": "^5.2.1",
     "highlight.js": "11.12.0",
     "ip-regex": "5.0.0",
     "slugify": "1.6.9",
+    "semver": "7.8.6",
+    "smol-toml": "1.9.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "@types/semver": "7.8.0",
     "playwright-core": "1.63.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
-    "vite": "8.3.5"
+    "vite": "8.3.5",
+    "@ghostvault/ui-kit": "file:../ui-kit"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "files": [
+    "dist",
+    "!dist/**/test-*",
+    "!dist/test-*",
+    "!dist/e2e-runner.*",
+    "!dist/demo.*",
+    "!dist/mock-server.*",
+    "public",
+    "opencode",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/damix96/ghost-vault.git",
+    "directory": "ghostvault"
+  },
+  "homepage": "https://github.com/damix96/ghost-vault#readme",
+  "bugs": {
+    "url": "https://github.com/damix96/ghost-vault/issues"
   }
 }

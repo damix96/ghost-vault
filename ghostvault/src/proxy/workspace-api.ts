@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { VaultStore } from '../vault/store.js';
-import { VaultDatabase } from '../vault/sqlite-db.js';
+import { VaultDatabase, SecretRow } from '../vault/sqlite-db.js';
 import { HookManager } from '../hooks/manager.js';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
@@ -12,6 +12,8 @@ import { GhostVaultConfig } from '../types/index.js';
 
 export class WorkspaceApi {
   constructor(private app: FastifyInstance, private db: VaultDatabase, private hooks: HookManager, private proxyConfig: Partial<GhostVaultConfig>, private vault?: VaultStore, private runtime = new RuntimeSessions()) {}
+
+  private archivedVersion = (row: SecretRow) => ({ ...row, representations: this.db.archivedRepresentations.get(row), representationMetadata: this.db.archivedRepresentations.metadata(row) });
 
   private state = () => {
     const routes = this.db.getAllRoutes();
@@ -38,10 +40,14 @@ export class WorkspaceApi {
     });
     this.app.get<{ Querystring: { group?: string; groups?: string; id?: string } }>('/api/export', async (req, reply) => {
       const { group = 'all', id } = req.query;
+      const manual = this.db.getSecrets();
+      const versions = this.db.getVersions();
+      const manualKeys = new Set(manual.map(entry => entry.key));
+      const orphans = () => versions.filter(version => !manualKeys.has(version.key)).map(this.archivedVersion);
       const groups: Record<string, unknown[]> = {
         connections: this.db.getAllRoutes().map(route => ({ ...route, suffix: this.db.getSetting('route_suffix_' + route.id, '') })),
         patterns: this.db.getPatterns(),
-        secrets: [...this.db.getSecrets().map(entry => ({ ...entry, origin: 'manual', representations: this.vault?.getSecretRepresentations(entry), versions: this.db.getVersions().filter(version => version.key === entry.key).map(version => ({ ...version, representations: this.vault?.getSecretRepresentations(version) })) })), ...(this.vault ? this.vault.getAutoSecrets().map(entry => ({ key: entry.key, real_value: entry.realValue, alias: entry.alias, hit_count: entry.hitCount, first_seen_at: entry.createdAt, last_seen_at: entry.updatedAt, origin: 'auto', storage: entry.storage, representations: entry.representations })) : this.db.getAutoSecrets().map(entry => ({ ...entry, origin: 'auto', storage: 'legacy' })))],
+        secrets: [...manual.map(entry => ({ ...entry, origin: 'manual', representations: this.vault?.getSecretRepresentations(entry), versions: versions.filter(version => version.key === entry.key).map(this.archivedVersion) })), ...(this.vault ? this.vault.getAutoSecrets().map(entry => ({ key: entry.key, real_value: entry.realValue, alias: entry.alias, hit_count: entry.hitCount, first_seen_at: entry.createdAt, last_seen_at: entry.updatedAt, origin: 'auto', storage: entry.storage, representations: entry.representations })) : this.db.getAutoSecrets().map(entry => ({ ...entry, origin: 'auto', storage: 'legacy' })))],
         hooks: this.hooks.exportConfiguration(),
         proxy: [{ id: 'proxy', ...this.proxyConfig }],
         settings: Object.entries(this.db.getAllSettings()).map(([key, value]) => ({ key, value })),
@@ -50,6 +56,7 @@ export class WorkspaceApi {
         const selected = [...new Set(req.query.groups.split(','))];
         if (id || !selected.length || selected.some(key => !Object.hasOwn(groups, key))) return reply.code(400).send({ error: 'Выберите разделы для экспорта' });
         const data = Object.fromEntries(selected.map(key => [key, key === 'settings' ? this.db.getAllSettings() : groups[key]]));
+        if (selected.includes('secrets')) data.orphanedSecretVersions = orphans();
         return { format: 'ghostvault-settings', version: 1, exportedAt: new Date().toISOString(), scope: 'selected', included: selected, data };
       }
       if (group !== 'all' && !Object.hasOwn(groups, group)) return reply.code(400).send({ error: 'Неизвестная группа экспорта' });
@@ -60,6 +67,7 @@ export class WorkspaceApi {
         }) : groups[group],
       };
       if (id && !(data[group] as unknown[])?.length) return reply.code(404).send({ error: 'Объект экспорта больше не существует' });
+      if (!id && (group === 'all' || group === 'secrets')) data.orphanedSecretVersions = orphans();
       return { format: 'ghostvault-settings', version: 1, exportedAt: new Date().toISOString(), scope: group, data, note: 'Настройки GhostVault. История разговоров и настройки внешних приложений не включены. Хуки, переданные программно, требуют исходного кода приложения.' };
     });
   };

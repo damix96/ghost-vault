@@ -85,9 +85,9 @@ class SecretLabelTests {
     const sse = new SseTransformer(this.vault, 32, () => {});
     const second = this.vault.setManualSecret('EDITABLE', 'synthetic-new-value');
     assert.equal(second.maskInAi, false);
-    assert.equal(second.retainedVersions, 1);
-    assert.notEqual(second.alias, first.alias);
-    assert.equal(this.vault.unmaskInboundText(first.alias), first.realValue);
+    assert.equal(second.retainedVersions, 0);
+    assert.equal(second.alias, first.alias);
+    assert.equal(this.vault.unmaskInboundText(first.alias), second.realValue);
     assert.equal(this.vault.maskOutboundText(first.realValue), first.realValue);
     this.vault.deleteSecret('EDITABLE');
     assert.equal(this.vault.unmaskInboundText(first.alias), first.alias);
@@ -100,7 +100,7 @@ class SecretLabelTests {
     const finalArgument = args.push('data: ' + JSON.stringify({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: argument.slice(8) } }] }, finish_reason: 'tool_calls' }] }) + '\n\ndata: [DONE]\n\n');
     assert.ok(!(firstArgument + finalArgument).includes(first.alias));
     assert.ok((firstArgument + finalArgument).includes('synthetic:/original'));
-    assert.throws(() => this.vault.setManualSecret('EDITABLE', 'synthetic-reuse'), /использовалось/);
+    assert.equal(this.vault.setManualSecret('EDITABLE', 'synthetic-reuse').alias, first.alias);
     const roundtrip = this.vault.setManualSecret('ROUNDTRIP', 'synthetic:/\\"😀');
     for (const form of this.vault.getSecretRepresentations(roundtrip)) {
       assert.equal(this.vault.unmaskInboundText(this.vault.maskOutboundText(form.value)), form.value);
@@ -148,11 +148,12 @@ class SecretLabelTests {
     assert.ok(!persisted.includes('synthetic-ephemeral'));
     assert.ok(!persisted.includes(ephemeral.alias));
     raw.close();
-    const child = spawnSync(process.execPath, ['--input-type=module', '-e', "import {VaultDatabase} from './dist/vault/sqlite-db.js'; import {VaultStore} from './dist/vault/store.js'; const db=new VaultDatabase(process.argv[1]); try { new VaultStore(db); process.exitCode=9; } catch { process.stdout.write('LOCKED'); } finally { db.close(); }", this.path], { cwd: process.cwd(), encoding: 'utf8' });
+    const imports = `import {VaultDatabase} from '${new URL('./vault/sqlite-db.js', import.meta.url).href}'; import {VaultStore} from '${new URL('./vault/store.js', import.meta.url).href}';`;
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', imports + "const db=new VaultDatabase(process.argv[1]); try { new VaultStore(db); process.exitCode=9; } catch { process.stdout.write('LOCKED'); } finally { db.close(); }", this.path], { cwd: process.cwd(), encoding: 'utf8' });
     assert.equal(child.status, 0);
     assert.equal(child.stdout, 'LOCKED');
     const crashPath = join(this.directory, 'crash.db');
-    const crash = spawnSync(process.execPath, ['--input-type=module', '-e', "import {VaultDatabase} from './dist/vault/sqlite-db.js'; import {VaultStore} from './dist/vault/store.js'; const db=new VaultDatabase(process.argv[1]); new VaultStore(db).registerAutoDetectedSecret('synthetic-crash','crash'); process.exit(0);", crashPath], { cwd: process.cwd(), encoding: 'utf8' });
+    const crash = spawnSync(process.execPath, ['--input-type=module', '-e', imports + "const db=new VaultDatabase(process.argv[1]); new VaultStore(db).registerAutoDetectedSecret('synthetic-crash','crash'); process.exit(0);", crashPath], { cwd: process.cwd(), encoding: 'utf8' });
     assert.equal(crash.status, 0);
     const recovered = new VaultDatabase(crashPath);
     assert.equal(new VaultStore(recovered).getAutoSecrets().length, 0);
@@ -165,7 +166,7 @@ class SecretLabelTests {
     this.vault = new VaultStore(this.db);
     assert.equal(this.vault.unmaskInboundText(ephemeral.alias), ephemeral.alias);
     assert.throws(() => this.vault.setAutoSecret(ephemeral.key, 'synthetic-rebound'), /использовалось/);
-    assert.equal(this.vault.unmaskInboundText(durable.alias), durable.realValue);
+    assert.equal(this.vault.unmaskInboundText(durable.alias), latest.realValue);
     assert.equal(this.vault.unmaskInboundText(latest.alias), latest.realValue);
     assert.equal(this.vault.getAutoSecrets()[0].storage, 'legacy');
     assert.equal(this.vault.unmaskInboundText('$${<LEGACY>}'), 'synthetic-legacy');
@@ -212,7 +213,7 @@ class SecretLabelTests {
       assert.deepEqual(publicVault.json().manual.find((secret: { key: string }) => secret.key === 'DISPLAY').representations, version.representations);
       const exported = await server.getApp().inject({ method: 'GET', url: '/api/export?group=secrets&id=DISPLAY' });
       assert.deepEqual(exported.json().data.secrets[0].representations, version.representations);
-      assert.equal(exported.json().data.secrets[0].versions[0].representations[0].alias, '$${<DISPLAY>}');
+      assert.deepEqual(exported.json().data.secrets[0].versions, []);
       assert.equal(sent, 2);
       const engine = server.getPatternEngine();
       for (const pattern of engine.getPatterns()) engine.deletePattern(pattern.id);
@@ -256,7 +257,7 @@ class SecretLabelTests {
       this.restart();
       await this.gateway();
       this.migration();
-      console.log('PASS secret labels: templates, API/preview/baseline, collisions/retries, rollback, versions, chunks, lock, restart, legacy, promotion');
+      console.log('PASS secret labels: templates, API/preview/baseline, collisions/retries, rollback, stable values, chunks, lock, restart, legacy, promotion');
     } finally { this.db.close(); rmSync(this.directory, { recursive: true, force: true }); }
   };
 }

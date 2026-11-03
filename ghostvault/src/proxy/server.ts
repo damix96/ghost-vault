@@ -21,6 +21,7 @@ import { TextReplacer } from '../vault/text-replacer.js';
 import { UpstreamClient } from './upstream-client.js';
 import { AdminAccess } from './admin-access.js';
 import { RuntimeSessions } from './runtime-sessions.js';
+import { RuntimeActivity } from '../runtime/activity.js';
 
 const publicPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../public');
 
@@ -47,6 +48,7 @@ export class GhostProxyServer {
   private runtime = new RuntimeSessions(undefined, (sessionId, reason) => this.eventBroadcaster.broadcast({ id: crypto.randomUUID(), type: 'session_removed', timestamp: new Date().toISOString(), client: '', details: { sessionId, reason } }));
   private config: GhostVaultConfig;
   private startTime = Date.now();
+  private activity = new RuntimeActivity();
 
   constructor(vault?: VaultStore, config?: Partial<GhostVaultConfig>, hookManager?: HookManager) {
     this.vault = vault ?? new VaultStore();
@@ -92,7 +94,9 @@ export class GhostProxyServer {
   public setUpstreamSettings = (settings: Record<string, string | undefined>) => new RouteRegistry(this.vault.getDatabase()).updateSettings(settings);
   public listen = async (): Promise<string> =>
     this.app.listen({ port: this.config.port, host: this.config.host });
-  public close = async (): Promise<void> => { this.eventBroadcaster.close(); await this.app.close(); this.runtime.clear(); };
+  public drain = async (timeoutMs = 5000): Promise<void> => this.activity.drain(timeoutMs);
+  public abortRequests = (): void => this.activity.abort();
+  public close = async (): Promise<void> => { this.activity.stopAdmission(); this.eventBroadcaster.close(); await this.activity.drain(); await this.app.close(); this.runtime.clear(); };
 
   public clearTransactionHistory = (sessionId?: string): void => {
     this.runtime.clear(sessionId);
@@ -128,7 +132,17 @@ export class GhostProxyServer {
     }
   };
 
-  private handleUniversalProxy = async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  private handleUniversalProxy = async (req: FastifyRequest, reply: FastifyReply): Promise<void> => this.activity.run(async stopping => {
+    const disconnect = new AbortController();
+    const onClose = (): void => { if (!reply.raw.writableEnded) disconnect.abort(); };
+    reply.raw.once('close', onClose);
+    if (reply.raw.destroyed) disconnect.abort();
+    try { await this.executeProxy(req, reply, AbortSignal.any([stopping, disconnect.signal])); }
+    finally { reply.raw.off('close', onClose); }
+  });
+
+  private executeProxy = async (req: FastifyRequest, reply: FastifyReply, signal: AbortSignal): Promise<void> => {
+    signal.throwIfAborted();
     if (req.url.startsWith('/api/')) { reply.status(404).send({ error: 'Unknown API endpoint' }); return; }
 
     const startPerf = performance.now();
@@ -169,6 +183,7 @@ export class GhostProxyServer {
     let reqCtx: RequestContext = { method: req.method, url: req.url, headers, body: req.body, client: clientName };
     try {
     reqCtx = await this.hookManager.runBeforeOutboundRequest(reqCtx);
+    signal.throwIfAborted();
 
     let inbound = this.vault.snapshot();
     let maskedBody: string | undefined = undefined;
@@ -182,6 +197,7 @@ export class GhostProxyServer {
       maskedBody = typeof mapped === 'string' ? mapped : JSON.stringify(mapped);
       inbound = this.vault.snapshot();
       maskedBody = await this.hookManager.runAfterOutboundMask(maskedBody, reqCtx);
+      signal.throwIfAborted();
     }
 
     if (maskedBody !== undefined && !reqCtx.headers['content-type']) reqCtx.headers['content-type'] = 'application/json';
@@ -193,12 +209,10 @@ export class GhostProxyServer {
     const targetUrl = route.targetUrl;
     const targetProvider = route.targetProvider;
     const hasBody = reqCtx.method !== 'GET' && reqCtx.method !== 'HEAD' && maskedBody !== undefined;
-    const disconnect = new AbortController();
-    reply.raw.once('close', () => { if (!reply.raw.writableEnded) disconnect.abort(); });
 
     let upstreamRes: Response;
     try {
-      upstreamRes = await this.upstreamClient.fetch(targetUrl, { method: reqCtx.method, headers: reqCtx.headers, body: hasBody ? maskedBody : undefined, signal: disconnect.signal });
+      upstreamRes = await this.upstreamClient.fetch(targetUrl, { method: reqCtx.method, headers: reqCtx.headers, body: hasBody ? maskedBody : undefined, signal });
     } catch (err: any) {
       const errCtx: ResponseContext = { status: reply.raw.destroyed ? 499 : 502, headers: {}, body: String(err?.message || err), isStream: false, client: clientName };
       record({ id: txId, sessionId, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: errCtx, interceptedSecrets, timestamp: new Date().toISOString(), latencyMs: Math.round(performance.now() - startPerf), maskedPrompt: maskedBody });
@@ -228,14 +242,16 @@ export class GhostProxyServer {
         if (!retain()) return false;
         record({ id: txId, sessionId, timestamp: started, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: { ...resCtx, body }, maskedPrompt: maskedBody, interceptedSecrets, sampleStreamChunk });
         return true;
-      });
+      }, signal);
       record({ id: txId, sessionId, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: resCtx, sampleStreamChunk, sampleStreamChunkIndex: 0, interceptedSecrets, timestamp: new Date().toISOString(), latencyMs: Math.round(performance.now() - startPerf), maskedPrompt: maskedBody });
+      signal.throwIfAborted();
       await this.hookManager.runAfterStream({ totalChunks, accumulatedText, client: clientName });
       return;
     }
 
     const responseText = await upstreamRes.text();
     const processedRaw = await this.hookManager.runBeforeInboundResponse(responseText, resCtx);
+    signal.throwIfAborted();
     const unmask = (text: string): string => {
       if (retain()) this.checkAndRecord(text, clientName, interceptedSecrets, 'inbound');
       return inbound.unmaskInboundText(text);
@@ -244,6 +260,7 @@ export class GhostProxyServer {
     try { unmaskedResponse = JSON.stringify(this.payloadCodec.response(JSON.parse(processedRaw), unmask)); }
     catch { unmaskedResponse = unmask(processedRaw); }
     const finalResponse = await this.hookManager.runAfterInboundUnmask(unmaskedResponse, resCtx);
+    signal.throwIfAborted();
 
     try {
       const parsedJson = JSON.parse(finalResponse);

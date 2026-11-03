@@ -34,7 +34,7 @@ GhostVault — локальный шлюз для защиты секретов 
 
 ```sh
 cd ghostvault
-npm run setup
+npm run setup:dev
 npm run build
 npm run demo
 ```
@@ -42,5 +42,7 @@ npm run demo
 Откройте [демонстрационный стенд](http://127.0.0.1:8766/dashboard). Внешние API-ключи не нужны: вместо облачной модели используется имитация.
 
 Для своего провайдера запустите `npm start`, откройте [панель подключений](http://127.0.0.1:8765/dashboard) и следуйте инструкции «Как подключить».
+
+Готовый npm-архив устанавливается командой `npm install --global ./ghostvault-0.1.0.tgz`. Общий сервер запускается через `ghostvault start` или автоматически при подключении MCP bridge. `ghostvault setup --client codex` показывает конфигурацию клиента; также поддерживаются Claude и Cursor. [Установка, MCP и автозапуск](ghostvault/README.md), [контракт реализации](docs/architecture/mcp-implementation-contract.md).
 
 **Статус: в разработке.** Маскирование действует в поддерживаемых полях запросов. Локальное хранилище секретов пока не зашифровано.
