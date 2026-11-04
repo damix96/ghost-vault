@@ -15,6 +15,7 @@ import { RuleEditor } from './rule-editor.js';
 import { RelativeTime } from './relative-time.js';
 import { SecretNavigation } from './secret-navigation.js';
 import { ViewPreferences } from './view-preferences.js';
+import { SecretRename } from './secret-rename.js';
 
 export class DashboardApp {
   api = new ApiClient();
@@ -22,6 +23,7 @@ export class DashboardApp {
   utilities = new UtilityDialogs(this);
   feed = new LiveFeed(this.api);
   modals = new ModalManager(this, this.api);
+  secretRename = new SecretRename(this);
   overview = new Overview(this, this.api);
   connections = new Connections(this, this.api);
   activeMainTab = 'overview';
@@ -36,6 +38,7 @@ export class DashboardApp {
   searchQuery = '';
   rulesQuery = '';
   vaultSignature = '';
+  vaultRequest = 0;
   ruleDetails = new DisclosureState();
   clipboard = new ClipboardTask(value => navigator.clipboard.writeText(value));
 
@@ -48,6 +51,7 @@ export class DashboardApp {
     this.ruleEditor.init();
     this.bindEvents();
     this.modals.init();
+    this.secretRename.init();
     this.overview.init();
     this.preferences.init();
     await this.connections.init();
@@ -115,9 +119,11 @@ export class DashboardApp {
     finally { this.refreshing = false; }
   };
 
-  fetchData = async () => {
+  fetchData = async (throwOnError = false) => {
+    const request = ++this.vaultRequest;
     try {
       const data = await this.api.getVault();
+      if (request !== this.vaultRequest) return;
       this.manualSecrets = data.manualSecrets || data.manual || [];
       this.autoSecrets = data.autoSecrets || data.auto || [];
       document.getElementById('autoRetentionNotice').textContent = data.retention?.notice || 'Новые найденные значения хранятся до перезапуска. Перенесите нужные в ручные.';
@@ -127,7 +133,10 @@ export class DashboardApp {
         this.vaultSignature = signature;
         this.render();
       }
-    } catch { this.renderer.renderStatus(false, 0); }
+    } catch (error) {
+      if (request === this.vaultRequest) this.renderer.renderStatus(false, 0);
+      if (throwOnError) throw error;
+    }
   };
 
   fetchPatterns = async () => {
@@ -222,7 +231,7 @@ export class DashboardApp {
   openModal = key => this.modals.openSecretModal(key);
 
   handleDeleteSecret = async key => {
-    if (!await this.utilities.confirm('Удалить секрет «' + key + '»?', 'Текущая и прежние подстановки этой записи перестанут восстанавливаться. Включённое правило может найти значение снова.')) return;
+    if (!await this.utilities.confirm('Удалить секрет «' + key + '»?', 'Подстановка перестанет работать в новых запросах. Уже начатые запросы завершатся с прежним значением. Включённое правило может найти значение снова.')) return;
     await this.api.deleteSecret(key);
     await this.fetchData();
     this.showToast('Секрет удалён. При активном правиле он может обнаружиться заново.');

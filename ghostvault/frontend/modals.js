@@ -54,14 +54,14 @@ export class ModalManager {
     key.value = draft?.key ?? secret?.key ?? '';
     key.readonly = Boolean(secret);
     key.label = secret ? 'Имя записи' : 'Имя подстановки';
-    key.description = secret ? 'Постоянное имя записи. При изменении значения подстановка обновится.' : EditorViews.keyDescription;
+    key.description = secret ? 'Имя и подстановка сохранятся. Для смены имени используйте «Переименовать» в списке.' : EditorViews.keyDescription;
     const restored = draft && (draft.key !== (secret?.key || '') || draft.value !== (secret?.realValue || '') || draft.description !== (secret?.description || ''));
     dialog.heading = (secret ? 'Изменить секрет' : 'Добавить секрет') + (restored ? ' · черновик' : '');
     document.getElementById('modalValInput').value = draft?.value ?? secret?.realValue ?? '';
     document.getElementById('modalDescInput').value = draft?.description ?? secret?.description ?? '';
     document.getElementById('modalPreviewToken').textContent = secret?.alias || (key.value ? '$${<' + key.value + '>}' : 'Введите имя');
     document.getElementById('modalPreviewLabel').textContent = secret ? 'Текущая подстановка' : 'В запросе';
-    document.getElementById('secretSaveEffect').textContent = secret ? (secret.maskInAi ? 'Замена останется включена. ' : 'Замена останется выключена. ') + 'При изменении значения новая подстановка появится после сохранения; прежняя восстанавливает только старые ответы.' : 'Сохранение добавит и включит замену этого точного значения. Запрос к модели не выполняется.';
+    document.getElementById('secretSaveEffect').textContent = secret ? (secret.maskInAi ? 'Замена останется включена. ' : 'Замена останется выключена. ') + 'Имя и подстановка останутся прежними. Новые запросы используют сохранённое значение; уже начатые завершаются с прежним.' : 'Сохранение добавит и включит замену этого точного значения. Запрос к модели не выполняется.';
     Ui.error('secretFormError', '');
     document.getElementById('secretForm').querySelectorAll('gv-field').forEach(field => { field.error = ''; });
     dialog.show(document.activeElement, document.querySelector('#viewSecrets gv-page'));

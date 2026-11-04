@@ -11,6 +11,7 @@ export class AliasConflict extends Error {
 export class AliasRegistry {
   constructor(private db: DatabaseSync, public randomSuffix = () => randomBytes(6).toString('hex').toUpperCase()) {
     db.exec('CREATE TABLE IF NOT EXISTS alias_registry (alias_hash TEXT PRIMARY KEY, owner TEXT NOT NULL, form INTEGER NOT NULL, alias TEXT); CREATE INDEX IF NOT EXISTS alias_registry_owner ON alias_registry(owner);');
+    db.exec('CREATE TABLE IF NOT EXISTS reconstructed_alias_owners (owner TEXT PRIMARY KEY);');
   }
 
   private hash = (alias: string): string => createHash('sha256').update(alias).digest('hex');
@@ -29,10 +30,26 @@ export class AliasRegistry {
   };
 
   public owner = (alias: string): string | undefined => this.get(alias)?.owner;
+  public isDurableBase = (alias: string): boolean => {
+    const row = this.get(alias);
+    return row?.form === 0 && row.alias === alias;
+  };
+
+  public reserveManual = (alias: string, owner: string): void => {
+    const current = this.get(alias);
+    if (current && current.owner !== owner) throw new AliasConflict('Это имя уже использовалось. Выберите новое имя.');
+    if (!current) this.db.prepare('INSERT INTO alias_registry (alias_hash, owner, form, alias) VALUES (?, ?, -1, ?)').run(this.hash(alias), owner, alias);
+  };
+
+  public transferManual = (aliases: string[], previousOwner: string, owner: string): void => {
+    if (aliases.some(alias => this.owner(alias) !== previousOwner)) throw new AliasConflict('Резерв имени изменён или принадлежит другому секрету.');
+    for (const alias of aliases) this.db.prepare('UPDATE alias_registry SET owner = ?, form = -1, alias = ? WHERE alias_hash = ? AND owner = ?').run(owner, alias, this.hash(alias), previousOwner);
+  };
 
   public forget = (alias: string): void => { this.db.prepare('UPDATE alias_registry SET alias = NULL WHERE owner = ?').run(this.owner(alias) || ''); };
 
-  public reserve = (forms: readonly SecretRepresentation[], owner: string, durable: boolean): void => {
+  public reserve = (forms: readonly SecretRepresentation[], owner: string, durable: boolean, reconstructed = false): void => {
+    if (reconstructed) this.db.prepare('INSERT OR IGNORE INTO reconstructed_alias_owners (owner) VALUES (?)').run(owner);
     forms.forEach(({ alias }, form) => {
       const current = this.get(alias);
       if (current && (current.owner !== owner || current.form !== form)) throw new AliasConflict('Метка уже выдана другому секрету. Выберите новое имя.');
@@ -48,6 +65,15 @@ export class AliasRegistry {
     const forms = new SecretRepresentations([secret]).get(secret);
     if (rows.length !== forms.length || rows.some(row => !row.alias)) throw new AliasConflict('Реестр меток не соответствует сохранённому секрету. Требуется восстановление совместимой копии.');
     return forms.map((entry, index) => ({ value: entry.value, alias: rows[index].alias! }));
+  };
+
+  public loadHistorical = (secret: SecretEntry): readonly SecretRepresentation[] => {
+    const owner = this.owner(secret.alias) || '';
+    const raw = { value: secret.realValue, alias: secret.alias };
+    if (this.db.prepare('SELECT 1 FROM reconstructed_alias_owners WHERE owner = ?').get(owner)) return [raw];
+    const values = [...new Set(Object.values(secret.variants))].filter(Boolean);
+    const rows = this.db.prepare('SELECT alias, form FROM alias_registry WHERE owner = ? AND form > 0 ORDER BY form').all(owner) as { alias: string | null; form: number }[];
+    return [raw, ...rows.flatMap(row => row.alias && values[row.form] !== undefined ? [{ value: values[row.form], alias: row.alias }] : [])];
   };
 
   public allocate = (secret: SecretEntry, durable: boolean, save: () => void): SecretRepresentation[] => this.transaction(() => {

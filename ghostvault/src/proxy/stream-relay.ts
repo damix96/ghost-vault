@@ -17,7 +17,7 @@ export interface StreamIdentity {
 export class StreamRelay {
   constructor(private vault: Pick<VaultStore, 'getInboundReplacements' | 'unmaskInboundText'>, private hooks: HookManager, private events: EventBroadcaster, private windowSize: number) {}
 
-  public run = async (upstream: Response, reply: FastifyReply, context: ResponseContext, identity: StreamIdentity, onValue: (text: string) => void, onProgress: (body: string, sample: string) => boolean = () => true, evidence?: ResponseChangeEvidence) => {
+  public run = async (upstream: Response, reply: FastifyReply, context: ResponseContext, identity: StreamIdentity, onValue: (text: string) => void, onProgress: (body: string, sample: string) => boolean = () => true, signal?: AbortSignal, evidence?: ResponseChangeEvidence) => {
     const transformer = new SseTransformer(this.vault, this.windowSize, onValue, undefined, evidence);
     const decoder = new TextDecoder();
     let accumulatedText = '';
@@ -25,13 +25,15 @@ export class StreamRelay {
     let totalChunks = 0;
     let lastProgress = 0;
     const write = async (text: string): Promise<void> => {
+      signal?.throwIfAborted();
       if (!text) return;
       if (reply.raw.destroyed) throw new Error('Client disconnected');
       if (!sampleStreamChunk) sampleStreamChunk = text;
       const hooked = await this.hooks.runStreamChunk(text, { chunkIndex: totalChunks++, rawChunk: text, client: identity.client });
       if (hooked !== text) evidence?.hookChanged();
+      signal?.throwIfAborted();
       accumulatedText += hooked;
-      if (!reply.raw.write(hooked)) await once(reply.raw, 'drain', { signal: AbortSignal.timeout(30000) });
+      if (!reply.raw.write(hooked)) await once(reply.raw, 'drain', { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000) });
       if (Date.now() - lastProgress < 250) return;
       lastProgress = Date.now();
       if (!onProgress(accumulatedText, sampleStreamChunk)) return;
@@ -41,16 +43,22 @@ export class StreamRelay {
       lastProgress = Date.now();
     };
     try {
+      signal?.throwIfAborted();
       await this.hooks.runBeforeStream(context);
+      signal?.throwIfAborted();
       reply.hijack();
       reply.raw.writeHead(upstream.status, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', 'connection': 'keep-alive', 'x-accel-buffering': 'no' });
       if (upstream.body) {
-        for await (const chunk of upstream.body as unknown as AsyncIterable<Uint8Array>) await write(transformer.push(decoder.decode(chunk, { stream: true })));
+        for await (const chunk of upstream.body as unknown as AsyncIterable<Uint8Array>) {
+          signal?.throwIfAborted();
+          await write(transformer.push(decoder.decode(chunk, { stream: true })));
+        }
       }
+      signal?.throwIfAborted();
       await write(transformer.push(decoder.decode()) + transformer.flush());
     } catch (error: any) {
       evidence?.finish('interrupted');
-      try { await write(transformer.flush(false)); } catch {}
+      if (!signal?.aborted) try { await write(transformer.flush(false)); } catch {}
       context.status = reply.raw.destroyed ? 499 : 502;
       const message = 'Stream interrupted: ' + String(error?.message || error);
       const errorEvent = 'event: error\ndata: ' + JSON.stringify({ type: 'error', error: { type: 'upstream_error', message } }) + '\n\n';

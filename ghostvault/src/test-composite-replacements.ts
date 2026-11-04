@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createParser } from 'eventsource-parser';
 import { CompositeAliasLifecycleTests } from './test-composite-alias-lifecycle.js';
 import { PayloadCodec } from './protocols/payload-codec.js';
@@ -199,6 +199,7 @@ class CompositeReplacementTests {
     };
     const failures = Object.entries(report.expectedCriteria).filter(([, passed]) => !passed).map(([name]) => name);
     report['failures'] = failures;
+    await mkdir(new URL('.', this.reportPath), { recursive: true });
     await writeFile(this.reportPath, JSON.stringify(report, null, 2) + '\n', 'utf8');
     this.db.close();
     assert.deepEqual(failures, [], 'Composite replacement failures are recorded in ' + this.reportPath.pathname);

@@ -1,22 +1,24 @@
 import { GhostProxyServer } from './proxy/server.js';
 import { VaultStore } from './vault/store.js';
+import { RuntimeApplication } from './runtime/application.js';
+import { RuntimeCli } from './runtime/cli.js';
+import { RuntimeOptions, RuntimeSettings } from './runtime/settings.js';
 
 export { GhostProxyServer, VaultStore };
 
 export class GhostVaultApp {
-  private vault = new VaultStore();
-  private server: GhostProxyServer;
+  private runtime;
 
-  constructor() {
-    this.server = new GhostProxyServer(this.vault);
+  constructor(options: RuntimeOptions = {}) {
+    this.runtime = RuntimeApplication.create(new RuntimeSettings(options));
   }
 
-  public getVault = (): VaultStore => this.vault;
+  public getVault = (): VaultStore => this.runtime.getVault();
 
-  public getServer = (): GhostProxyServer => this.server;
+  public getServer = (): GhostProxyServer => this.runtime.getServer();
 
-  public start = async (): Promise<string> => this.server.listen();
+  public start = async (): Promise<string> => { await this.runtime.start(); return this.runtime.settings.url; };
+  public close = async (): Promise<void> => this.runtime.close();
 }
 
-const app = new GhostVaultApp();
-app.start().then(addr => console.log('GhostVault running at ' + addr));
+if (RuntimeCli.isMain(import.meta.url)) RuntimeCli.main();

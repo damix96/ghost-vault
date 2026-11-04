@@ -14,8 +14,9 @@ export class ApiClient {
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       const details = body.error?.fieldErrors ? Object.entries(body.error.fieldErrors).map(([field, errors]) => field + ': ' + errors.join(', ')).join('; ') : '';
-      const error = new Error(typeof body.error === 'string' ? body.error : details || `HTTP ${res.status}`);
+      const error = new Error(typeof body.message === 'string' ? body.message : typeof body.error === 'string' ? body.error : details || `HTTP ${res.status}`);
       error.status = res.status;
+      error.code = body.code;
       throw error;
     }
     return res.json();
@@ -94,6 +95,12 @@ export class ApiClient {
     this.request('/api/vault/promote', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+
+  renameSecret = async (key, name) =>
+    this.request(`/api/vault/secret/${encodeURIComponent(key)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
     });
 
   deleteSecret = async key =>

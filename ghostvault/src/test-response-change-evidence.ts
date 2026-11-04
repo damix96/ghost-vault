@@ -12,6 +12,7 @@ class ResponseEvidenceTests {
   private db = new VaultDatabase(':memory:');
   private vault = new VaultStore(this.db);
   private secret = this.vault.setManualSecret('EVIDENCE', 'synthetic:/old');
+  private priorSnapshot = this.vault.snapshot();
   private latest = this.vault.setManualSecret('EVIDENCE', 'synthetic:/"quoted"\\path😀');
   private snapshot = this.vault.snapshot();
   private evidence = () => new ResponseChangeEvidence(this.snapshot.getInboundReplacements());
@@ -31,6 +32,11 @@ class ResponseEvidenceTests {
   };
 
   private ordinary = (): void => {
+    assert.equal(this.secret.alias, this.latest.alias);
+    const prior = new ResponseChangeEvidence(this.priorSnapshot.getInboundReplacements());
+    assert.equal(prior.restore(this.secret.alias), this.secret.realValue);
+    assert.equal(prior.snapshot().items[0].key, 'EVIDENCE');
+    assert.equal(this.evidence().restore(this.secret.alias), this.latest.realValue);
     const evidence = this.evidence();
     const original = this.latest.realValue;
     const text = '😀'.repeat(200) + original + ' literal; ' + this.latest.alias + ' adjacent ' + this.latest.alias + ' end';
@@ -68,7 +74,7 @@ class ResponseEvidenceTests {
       assert.equal(evidence.snapshot().items.length, 0);
       output += stream.push(this.frame({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }));
       const read = new StreamContent().read(output).map(item => item.text || '').join('');
-      assert.equal(read, text.replace(encoded.alias, encoded.value).replace(this.secret.alias, this.secret.realValue));
+      assert.equal(read, text.replace(encoded.alias, encoded.value).replace(this.secret.alias, this.latest.realValue));
       assert.equal(evidence.snapshot().items.length, 2);
       this.assertFragments(evidence.snapshot().items);
       for (const item of evidence.snapshot().items) assert.equal(read.slice(item.after.contextStart, item.after.contextStart + item.after.text.length), item.after.text);
@@ -145,7 +151,7 @@ class ResponseEvidenceTests {
   };
 
   public run = async (): Promise<void> => {
-    try { this.ordinary(); this.streaming(); await this.gateway(); console.log('PASS response evidence: actual replacement fragments, literals/unknowns excluded, UTF-16/context merge, encoded/versioned aliases, all chunk splits, decoded tool JSON, protocol duplicates, interruption, hooks, request snapshot deletion, RAM/latest budget and API'); }
+    try { this.ordinary(); this.streaming(); await this.gateway(); console.log('PASS response evidence: actual replacement fragments, literals/unknowns excluded, UTF-16/context merge, encoded/mutable aliases and immutable request snapshots, all chunk splits, decoded tool JSON, protocol duplicates, interruption, hooks, request snapshot deletion, RAM/latest budget and API'); }
     finally { this.db.close(); }
   };
 }

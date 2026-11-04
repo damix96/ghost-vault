@@ -8,6 +8,10 @@ Why: an original may already occur literally in a model response. Searching the 
 
 Implementation: `ghostvault/src/telemetry/response-change-evidence.ts`; integration in `proxy/server.ts`, `proxy/sliding-buffer.ts`, `protocols/stream-buffers.ts`, `proxy/sse-transformer.ts`, `proxy/stream-relay.ts`. `vault/store.ts#getInboundReplacements` includes the owning key from the immutable request snapshot, including archived manual representations. No token grammar, mapping allocation or persistence changes.
 
+## Mutable-variable integration (2026-11-04)
+
+The incoming [stable-variable contract](stable-variable-semantics.md) supersedes historical manual-version execution described in the original implementation below. Evidence now captures current manual/automatic representations only, with their owner key. Persisted archives remain administrative data and never enter new restoration snapshots. An already running request retains its immutable snapshot across edit/rename/delete; fresh requests use the latest mutable value under the stable token. Stream cancellation and runtime drain are preserved; `StreamRelay.run` accepts `signal` before optional evidence. Updated tests prove old in-flight and new request evidence for the same mutable alias. No live migration/deployment performed during source merge.
+
 ## API contract
 
 Existing session/history transaction responses add optional `responseChanges`; old records/fixtures can omit it. No endpoint/request changes. Defined by `telemetry/types.ts` and `telemetry/response-change-evidence.ts`:
