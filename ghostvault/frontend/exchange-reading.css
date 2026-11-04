@@ -10,12 +10,10 @@
 .app-chat :is(.app-message,.app-change-card) { padding-block: 1.5rem; }
 .app-chat .app-change-card > header { display: grid; gap: .35rem; margin-bottom: 1rem; }
 .app-chat .app-change-card > header strong { margin: 0; }
-.app-change-fragments { display: grid; gap: 1.25rem; }
+.app-change-fragments { display: block; }
 .app-change-fragment { border-left: 2px solid #536681; padding: .6rem 1.25rem; min-width: 0; }
 .app-chat .app-change-text { max-width: 68ch; margin: 0; font-size: var(--gv-size-body); line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
-.app-fragment-cut { display: block; color: #a6b4c9; font: 400 var(--gv-size-label)/1 var(--gv-font); height: .9rem; user-select: none; }
-.app-fragment-cut:first-child { margin-bottom: .25rem; }
-.app-fragment-cut:last-child { margin-top: .25rem; }
+.app-fragment-cut { display: inline; color: #a6b4c9; font: inherit; user-select: none; }
 .app-context-toggle { margin-top: .75rem; margin-left: 1.35rem; }
 .app-chat [data-content-kind="code"] .app-change-fragment { border-left-color: #6b8291; background: #181c23; padding: .9rem 1.15rem; }
 .app-chat [data-content-kind="code"] .app-change-text { font: 400 var(--gv-size-label)/1.7 var(--gv-font-mono); max-width: 80ch; tab-size: 4; }

@@ -33,17 +33,20 @@ export class ResponseChangeView {
   fragment = group => {
     const kind = ['tool-arguments', 'protocol-snapshot'].includes(group.source) ? 'code' : 'prose';
     const label = group.source === 'tool-arguments' ? 'Аргументы инструмента' : group.source === 'protocol-snapshot' ? 'Данные протокола' : 'Восстановлено';
+    const html = group.windows.map((window, index) => (index || window.start > 0 ? ChangeFragments.ellipsis() : '') + this.window(window)).join('');
+    const last = group.windows.at(-1);
+    const tail = Number.isInteger(last.totalLength) && last.start + last.text.length < last.totalLength ? ChangeFragments.ellipsis() : '';
+    return `<article class="app-change-card" data-reading-key="response.change.${escapeHtml(group.id)}" data-timeline-item tabindex="-1" data-content-kind="${kind}"><header><strong>${label}</strong></header><div class="app-change-fragment"><div class="app-change-text">${html}${tail}</div></div></article>`;
+  };
+
+  window = group => {
     let html = '';
-    let trimStart = 0;
-    let trimEnd = group.text.length;
-    const cutEnd = Number.isInteger(group.totalLength) && group.start + group.text.length < group.totalLength;
-    let offset = trimStart;
+    let offset = 0;
     for (const item of [...group.matches].sort((a, b) => a.start - b.start)) {
       if (item.start < offset) continue;
       html += escapeHtml(group.text.slice(offset, item.start)) + this.restored(item);
       offset = item.end;
     }
-    html += escapeHtml(group.text.slice(offset, trimEnd));
-    return `<article class="app-change-card" data-reading-key="response.change.${escapeHtml(group.id)}" data-timeline-item tabindex="-1" data-content-kind="${kind}"><header><strong>${label}</strong></header><div class="app-change-fragment">${group.start > 0 ? '<span class="app-fragment-cut" aria-label="Начало поля скрыто">…</span>' : ''}<div class="app-change-text">${html}</div>${cutEnd ? '<span class="app-fragment-cut" aria-label="Продолжение поля скрыто">…</span>' : ''}</div></article>`;
+    return html + escapeHtml(group.text.slice(offset));
   };
 }

@@ -1,3 +1,5 @@
+import { ContextWindow } from './context-window.js';
+
 export class RestorationFragments {
   static group = items => {
     const fields = new Map();
@@ -7,16 +9,12 @@ export class RestorationFragments {
       if (!fields.has(key)) fields.set(key, []);
       fields.get(key).push(item);
     }
-    return [...fields.values()].flatMap(RestorationFragments.merge);
+    return [...fields.values()].map(items => ({ id: items[0].id, source: items[0].source, fieldId: items[0].fieldId, windows: RestorationFragments.merge(items) }));
   };
 
   static clip = item => {
     const field = item.after;
-    const before = field.text.slice(0, field.start);
-    const after = field.text.slice(field.end);
-    const boundary = after.search(/[\r\n]/);
-    const from = Math.max(0, before.lastIndexOf('\n') + 1, before.lastIndexOf('\r') + 1);
-    const to = boundary < 0 ? field.text.length : field.end + boundary;
+    const { start: from, end: to } = ContextWindow.around(field.text, field.start, field.end, 96);
     return { ...item, after: { ...field, text: field.text.slice(from, to), start: field.start - from, end: field.end - from, contextStart: field.contextStart + from } };
   };
 
