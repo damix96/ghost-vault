@@ -36,11 +36,7 @@ export class ResponseChangeView {
     let html = '';
     let trimStart = 0;
     let trimEnd = group.text.length;
-    const first = group.matches.reduce((start, item) => Math.min(start, item.start), group.text.length);
-    const last = group.matches.reduce((end, item) => Math.max(end, item.end), 0);
     const cutEnd = Number.isInteger(group.totalLength) && group.start + group.text.length < group.totalLength;
-    if (group.start > 0) while (trimStart < first && !/\s/.test(group.text[trimStart])) trimStart++;
-    if (cutEnd) while (trimEnd > last && !/\s/.test(group.text[trimEnd - 1])) trimEnd--;
     let offset = trimStart;
     for (const item of [...group.matches].sort((a, b) => a.start - b.start)) {
       if (item.start < offset) continue;

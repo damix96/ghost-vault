@@ -1,12 +1,23 @@
 export class RestorationFragments {
   static group = items => {
     const fields = new Map();
-    for (const item of items) {
+    for (const original of items) {
+      const item = RestorationFragments.clip(original);
       const key = JSON.stringify([item.source, item.fieldId]);
       if (!fields.has(key)) fields.set(key, []);
       fields.get(key).push(item);
     }
     return [...fields.values()].flatMap(RestorationFragments.merge);
+  };
+
+  static clip = item => {
+    const field = item.after;
+    const before = field.text.slice(0, field.start);
+    const after = field.text.slice(field.end);
+    const boundary = after.search(/[\r\n]/);
+    const from = Math.max(0, before.lastIndexOf('\n') + 1, before.lastIndexOf('\r') + 1);
+    const to = boundary < 0 ? field.text.length : field.end + boundary;
+    return { ...item, after: { ...field, text: field.text.slice(from, to), start: field.start - from, end: field.end - from, contextStart: field.contextStart + from } };
   };
 
   static merge = items => {

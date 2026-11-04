@@ -6,10 +6,13 @@ export class ChangeFragments {
   static windows = (value, matches) => {
     const windows = [];
     for (const match of matches) {
-      let start = Math.max(0, match.start - 100);
-      let end = Math.min(value.length, match.end + 100);
-      while (start > 0 && start > match.start - 140 && !/\s/.test(value[start - 1])) start--;
-      while (end < value.length && end < match.end + 140 && !/\s/.test(value[end])) end++;
+      const before = value.slice(0, match.start);
+      const after = value.slice(match.end);
+      const breakAfter = after.search(/[\r\n]/);
+      let start = Math.max(0, match.start - 100, before.lastIndexOf('\n') + 1, before.lastIndexOf('\r') + 1);
+      let end = Math.min(value.length, match.end + 100, breakAfter < 0 ? value.length : match.end + breakAfter);
+      if (start < match.start && /[\uDC00-\uDFFF]/.test(value[start])) start++;
+      if (end > match.end && /[\uD800-\uDBFF]/.test(value[end - 1])) end--;
       const last = windows.at(-1);
       if (last && start <= last.end) last.end = Math.max(last.end, end);
       else windows.push({ start, end });
