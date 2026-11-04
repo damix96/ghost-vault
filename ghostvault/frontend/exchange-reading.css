@@ -1,4 +1,4 @@
-.app-content:has(#viewOverview:not([hidden])) { width: calc(100% - 4.5rem); margin-left: auto; margin-right: 4.5rem; }
+.app-content:has(#viewOverview:not([hidden])) { width: calc(100% - 9rem); margin-inline: auto; }
 .app-timeline-navigation { right: .65rem; bottom: 1.5rem; }
 .app-chat { background: #1c2028; }
 .app-chat-toolbar { gap: .75rem; padding: 1rem 1.25rem; }
@@ -35,3 +35,6 @@
 .app-chat .app-change-card > header strong { font-size: var(--gv-size-label); font-weight: 600; line-height: 1.45; }
 .app-chat .app-message-role { padding: .6rem .85rem; background: #252b35; border-left: 3px solid #8291a5; margin-bottom: 1.25rem; font: 600 var(--gv-size-label)/1.45 var(--gv-font); }
 .app-chat .app-final-response > .app-change-card:first-child { padding-top: 0; }
+
+.app-stream-status { color: var(--gv-muted); margin: .5rem 0 1rem; }
+.app-chat .app-live-response { max-height: 28rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 1rem; margin: 0; background: #181c23; font: var(--gv-size-label)/1.7 var(--gv-font-mono); }

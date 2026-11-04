@@ -6,6 +6,7 @@ import { DisclosureState } from './disclosure-state.js';
 import { ReadingPosition } from './reading-position.js';
 import { TimelineNavigation } from './timeline-navigation.js';
 import { RuntimeSessionEvents } from './runtime-session-events.js';
+import { StreamPresentation } from './stream-presentation.js';
 
 
 export class Overview {
@@ -28,6 +29,7 @@ export class Overview {
   callDetails = new DisclosureState();
   renderGeneration = 0;
   expandedContexts = new Set();
+  stream = new StreamPresentation(this);
 
   constructor(app, api) {
     this.app = app;
@@ -84,6 +86,8 @@ export class Overview {
 
   setLive = connected => {
     this.live = connected;
+    if (!connected) { this.stream.ready = false; this.stream.reset(); }
+    else this.refresh();
     document.getElementById('liveStreamText').textContent = connected ? 'События подключены' : 'Переподключаемся';
     document.getElementById('liveStreamDot').classList.toggle('app-offline', !connected);
     this.renderRoutes();
@@ -105,19 +109,13 @@ export class Overview {
     const details = event.details || {};
     const editing = this.app.connections.editor.isOpen();
     if (event.type === 'request_started') this.pending.set(details.transactionId, { started: Date.now(), route: this.routeFor(details.endpoint), session: details.sessionId });
+    this.stream.handle(event);
     RuntimeSessionEvents.handle(this, event);
     if (event.type === 'transaction_completed') {
       const route = this.pending.get(details.transactionId)?.route || this.routeFor(details.endpoint);
       this.pending.delete(details.transactionId);
       if (route && details.latest !== false) this.results.set(route, { status: details.status, timestamp: event.timestamp });
-      if (!editing && document.getElementById('overviewStream').dataset.transaction === details.transactionId) document.getElementById('overviewStream').hidden = true;
       if (details.latest !== false) this.refresh();
-    }
-    if (!editing && event.type === 'stream_progress' && details.sessionId === this.selectedSession && this.pending.get(details.transactionId)?.route === this.app.connections.workspace.selected && details.text) {
-      const preview = document.getElementById('overviewStream');
-      preview.dataset.transaction = details.transactionId;
-      preview.hidden = true;
-      document.getElementById('overviewStreamText').textContent = '';
     }
     if (!editing) {
       this.renderActivity();
@@ -135,7 +133,7 @@ export class Overview {
     this.signature = '';
     this.step = null;
     this.renderConversation();
-    document.getElementById('overviewStream').hidden = true;
+    this.stream.reset();
     await this.refresh();
   };
 
@@ -150,7 +148,7 @@ export class Overview {
     this.sessions = [];
     this.query = '';
     document.getElementById('sessionSearch').value = '';
-    document.getElementById('overviewStream').hidden = true;
+    this.stream.reset();
     this.renderSessions();
     this.renderFirstRun();
     this.renderConversation();
@@ -192,11 +190,11 @@ export class Overview {
       this.sessions = sessions.filter(session => (session.endpoints || [session.endpoint]).some(endpoint => this.routeFor(endpoint) === this.app.connections.workspace.selected)).sort((a, b) => new Date(b.lastSeen || b.timestamp) - new Date(a.lastSeen || a.timestamp));
       this.renderFirstRun();
       this.app.connections.setRoutes(routes);
-      const preview = document.getElementById('overviewStream');
-      if (preview.dataset.transaction && !this.pending.has(preview.dataset.transaction)) preview.hidden = true;
+
       if (!this.sessions.some(session => session.id === this.selectedSession)) {
         this.pendingCall = null;
         this.step = null;
+        this.stream.reset();
         this.signature = '';
         this.expandedContexts.clear();
         HintLifecycle.hide(document.getElementById('viewOverview'));
@@ -207,6 +205,7 @@ export class Overview {
       const steps = requestedSession ? await this.api.getSession(requestedSession) : [];
       if (generation !== this.sessionGeneration || requestedSession !== this.selectedSession || this.app.connections.editor.isOpen()) return;
       const step = steps.filter(item => this.routeFor(item.request?.url) === this.app.connections.workspace.selected).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0] || null;
+      this.stream.synchronize(step);
       const signature = JSON.stringify([this.selectedSession, step, [...this.app.manualSecrets, ...this.app.autoSecrets].map(secret => [secret.key, secret.realValue])]);
       this.pendingCall = { step, signature, session: requestedSession, generation };
       this.flushConversation();
@@ -267,6 +266,7 @@ export class Overview {
     this.callDetails.render(container, this.step ? LatestCallView.render(this.step, this.mode, [...this.app.manualSecrets, ...this.app.autoSecrets], this.contentMode, this.selectedSession || '', this.app.preferences, this.expandedContexts) : OverviewView.empty());
     container.querySelectorAll('[data-call-mode]').forEach(action => { action.pressed = action.dataset.callMode === this.mode; });
     container.scrollTop = position;
+    this.stream.update();
     if (reading) requestAnimationFrame(() => requestAnimationFrame(() => { if (generation === this.renderGeneration) reading.restore(); }));
   };
 }

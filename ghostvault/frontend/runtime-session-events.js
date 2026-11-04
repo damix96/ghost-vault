@@ -6,7 +6,7 @@ export class RuntimeSessionEvents {
     if (event.type === 'request_started') {
       overview.sessionGeneration++;
       overview.pendingCall = null;
-      if (details.sessionId === overview.selectedSession) document.getElementById('overviewStream').hidden = true;
+
       overview.refresh();
     }
     if (!['session_removed', 'sessions_cleared'].includes(event.type)) return;
@@ -24,8 +24,7 @@ export class RuntimeSessionEvents {
       overview.expandedContexts.clear();
       overview.callDetails.opened.clear();
       HintLifecycle.hide(document.getElementById('viewOverview'));
-      document.getElementById('overviewStream').hidden = true;
-      document.getElementById('overviewStreamText').textContent = '';
+      overview.stream.reset();
       overview.renderConversation();
     }
     overview.renderSessions();
