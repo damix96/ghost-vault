@@ -5,14 +5,16 @@ import { ClipboardTask } from '../models/clipboard-task.js';
 export class GvCopy extends GvElement {
   static properties = { value: {}, label: {}, compact: { type: Boolean }, status: { state: true }, pending: { state: true } };
   static styles = css`
-    :host{display:inline-flex;max-width:100%;vertical-align:middle}
+    :host{display:inline-flex;align-items:center;flex-shrink:0;max-width:100%;height:1.6em;vertical-align:middle}
     .control{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;max-width:100%}
     button{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;min-height:2.25rem;padding:.35rem .6rem;border:1px solid transparent;border-radius:.4rem;background:transparent;color:var(--gv-muted,#a0a7b5);font:inherit;font-size:var(--gv-size-label,.875rem);cursor:pointer}
     button:hover{background:var(--gv-hint-surface,#2b2f39);color:var(--gv-text,#d7dbe5)}
     button:focus-visible{outline:2px solid var(--gv-focus,#8aabfa);outline-offset:2px}
     button:disabled{cursor:progress;opacity:.65}
     button[data-copied]{color:#b9d9c6}
-    gv-icon{width:1rem;height:1rem}
+    button{min-height:1.75rem;padding:.25rem .35rem}
+    gv-icon{display:flex;align-items:center;justify-content:center;width:1rem;height:1rem;line-height:1}
+    gv-icon wa-icon{display:block;font-size:1rem;line-height:1}
     .label{display:grid}.label span{grid-area:1/1}.label .measure{visibility:hidden}
     .status{font-size:var(--gv-size-secondary,.8125rem);color:var(--gv-text,#d7dbe5);max-width:20rem;overflow-wrap:anywhere}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}

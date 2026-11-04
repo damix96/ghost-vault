@@ -2,7 +2,8 @@
 #overviewDialogLayout { grid-template-columns: 12rem minmax(0,1fr); gap: 1.5rem; }
 #overviewDialogLayout.app-no-sessions { grid-template-columns: minmax(0,1fr); }
 #overviewConversation { overflow: visible; max-height: none; }
-.app-connection-identity { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; min-width: 0; }
+.app-connection-identity { display: flex; align-items: flex-start; gap: .4rem; min-width: 0; }
+.app-connection-identity code { min-width: 0; overflow-wrap: anywhere; line-height: 1.6; }
 .app-session-header { display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: .75rem 1.5rem; padding: .2rem 0 1.25rem; }
 .app-session-header h3 { margin: 0 0 .3rem; font-size: 1rem; font-weight: 600; }
 .app-current-session { font-size: .75rem; color: #a7b9dc; overflow-wrap: anywhere; }
@@ -29,7 +30,7 @@
 .app-chat .app-final-response > h3 { margin: 0 0 .75rem; color: #c2d3f1; font-weight: 600; }
 .app-chat .app-code-block { margin: .75rem 0; }
 .app-chat-messages > .app-code-block .app-code { max-height: none; overflow: visible; }
-.app-code-block figcaption { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 2.5rem; }
+.app-code-block figcaption { display: flex; align-items: center; justify-content: flex-start; gap: .5rem; min-height: 2.5rem; }
 .app-call-secrets { position: sticky; top: 1rem; display: block; padding: 0; border: 0; min-width: 0; }
 .app-variables-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .6rem .4rem; }
 .app-variables-heading h3 { margin: 0; font-size: .85rem; font-weight: 600; }

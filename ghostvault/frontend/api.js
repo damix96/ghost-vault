@@ -13,8 +13,10 @@ export class ApiClient {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      const details = body.error?.fieldErrors ? Object.entries(body.error.fieldErrors).map(([field, errors]) => field + ': ' + errors.join(', ')).join('; ') : '';
-      const error = new Error(typeof body.message === 'string' ? body.message : typeof body.error === 'string' ? body.error : details || `HTTP ${res.status}`);
+      const fields = body.fieldErrors ?? body.error?.fieldErrors;
+      const details = fields && typeof fields === 'object' ? Object.entries(fields).map(([field, errors]) => field + ': ' + (Array.isArray(errors) ? errors.join(', ') : String(errors))).join('; ') : '';
+      const message = typeof body.message === 'string' ? body.message : '';
+      const error = new Error(details || message || (typeof body.error === 'string' ? body.error : `HTTP ${res.status}`));
       error.status = res.status;
       error.code = body.code;
       throw error;

@@ -25,9 +25,11 @@
 .app-record-details > summary:hover { color: #d4e2ff; }
 .app-record-details > summary:focus-visible { outline: 2px solid var(--gv-focus); outline-offset: 3px; border-radius: .25rem; }
 .app-expression-heading, .app-vault-value > header { display: flex; align-items: center; justify-content: flex-start; gap: .4rem; font-size: .75rem; color: var(--gv-muted); }
-.app-value-content { display: flex; align-items: flex-start; gap: .4rem; min-width: 0; }
+.app-value-content { display: flex; align-items: flex-start; gap: .4rem; min-width: 0; font-size: var(--gv-size-label); line-height: 1.6; }
 .app-value-content > :first-child { min-width: 0; }
 .app-value-content gv-copy { flex: 0 0 auto; }
+.app-vault-value .app-value-content { margin-block: .25rem; }
+.app-vault-value .app-value-content pre { margin: 0; }
 .app-expression-heading { margin-top: .5rem; }
 #rulesList .app-rule-expression { margin: .25rem 0 .6rem; max-height: 18rem; }
 .app-record-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1rem; border-top: 1px solid var(--gv-border); padding-top: .75rem; margin-top: .75rem; }

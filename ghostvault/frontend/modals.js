@@ -4,6 +4,7 @@ import { HintLifecycle } from './hint-lifecycle.js';
 import { FormFeedback } from './form-feedback.js';
 import { EditorValidation } from './editor-validation.js';
 import { RulePreview } from './rule-preview.js';
+import { SecretKeyInput } from './secret-key-input.js';
 
 export class ModalManager {
   editingKey = null;
@@ -28,9 +29,7 @@ export class ModalManager {
     document.getElementById('secretForm').addEventListener('submit', this.handleSaveSecret);
     document.getElementById('patternForm').addEventListener('submit', this.handleSavePattern);
     ['secret', 'pattern'].forEach(kind => FormFeedback.bind(document.getElementById(kind + 'Form'), document.getElementById(kind + 'FormError')));
-    document.getElementById('modalKeyInput').addEventListener('gv-input', event => {
-      document.getElementById('modalPreviewToken').textContent = event.detail.value ? '$${<' + event.detail.value + '>}' : 'Будет показана после ввода имени';
-    });
+    this.secretKeyInput = new SecretKeyInput(document.getElementById('modalKeyInput'), document.getElementById('modalPreviewToken'));
     document.getElementById('secretModal').addEventListener('gv-close', event => {
       HintLifecycle.hide(event.currentTarget);
       const page = document.getElementById('viewSecrets');
@@ -51,7 +50,7 @@ export class ModalManager {
     const secret = [...this.app.manualSecrets, ...this.app.autoSecrets].find(item => item.key === secretKey);
     const key = document.getElementById('modalKeyInput');
     const draft = this.drafts.get(secretKey || '');
-    key.value = draft?.key ?? secret?.key ?? '';
+    key.value = secret ? draft?.key ?? secret.key : SecretKeyInput.normalize(draft?.key ?? '');
     key.readonly = Boolean(secret);
     key.label = secret ? 'Имя записи' : 'Имя подстановки';
     key.description = secret ? 'Имя и подстановка сохранятся. Для смены имени используйте «Переименовать» в списке.' : EditorViews.keyDescription;
@@ -59,7 +58,7 @@ export class ModalManager {
     dialog.heading = (secret ? 'Изменить секрет' : 'Добавить секрет') + (restored ? ' · черновик' : '');
     document.getElementById('modalValInput').value = draft?.value ?? secret?.realValue ?? '';
     document.getElementById('modalDescInput').value = draft?.description ?? secret?.description ?? '';
-    document.getElementById('modalPreviewToken').textContent = secret?.alias || (key.value ? '$${<' + key.value + '>}' : 'Введите имя');
+    document.getElementById('modalPreviewToken').textContent = secret?.alias || EditorValidation.keyPreview(key.value);
     document.getElementById('modalPreviewLabel').textContent = secret ? 'Текущая подстановка' : 'В запросе';
     document.getElementById('secretSaveEffect').textContent = secret ? (secret.maskInAi ? 'Замена останется включена. ' : 'Замена останется выключена. ') + 'Имя и подстановка останутся прежними. Новые запросы используют сохранённое значение; уже начатые завершаются с прежним.' : 'Сохранение добавит и включит замену этого точного значения. Запрос к модели не выполняется.';
     Ui.error('secretFormError', '');

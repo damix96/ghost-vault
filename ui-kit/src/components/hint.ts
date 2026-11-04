@@ -10,11 +10,11 @@ export class GvHint extends GvElement {
     .panel{box-sizing:border-box;width:max-content;min-width:12rem;max-width:min(30rem,var(--auto-size-available-width,90vw));max-height:min(28rem,var(--auto-size-available-height,70vh));overflow:auto;background:var(--gv-hint-surface,#252b36);color:var(--gv-text);border:1px solid #526079;border-radius:.75rem;padding:1rem 1.1rem;box-shadow:0 8px 32px #0006,0 1px 3px #0004;font:400 var(--gv-size-secondary,.8125rem)/1.55 var(--gv-font);text-align:left;overflow-wrap:anywhere}
     .title{font-size:var(--gv-size-secondary,.8125rem);font-weight:600;color:#aabbd6;margin-bottom:.55rem;max-width:26rem;overflow-wrap:anywhere}
     .text{white-space:pre-wrap;max-width:28rem}
-    .value-row{display:flex;align-items:baseline;gap:.45rem;max-width:28rem}
+    .value-row{display:flex;align-items:flex-start;gap:.45rem;max-width:28rem}
     .value-row + .value-row{margin-top:.35rem}
     .value-row>span:first-child{color:var(--gv-muted);font-size:var(--gv-size-secondary,.8125rem);flex:0 0 auto}
     .value-row code{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0;font:inherit}
-    .value-row gv-copy{flex-shrink:0;align-self:center}
+    .value-row gv-copy{flex-shrink:0;align-self:flex-start}
     button.token{padding:0;border:0;background:transparent;color:var(--gv-link,#aec8ff);font:inherit;text-align:left;text-decoration:underline;text-underline-offset:3px;cursor:pointer;overflow-wrap:anywhere}
     :host-context(.app-secret-control) [data-secret-key]{cursor:pointer;text-decoration:underline;text-underline-offset:3px}
     [data-secret-key]:focus-visible{outline:2px solid var(--gv-focus);outline-offset:3px}

@@ -1,0 +1,74 @@
+﻿import assert from 'node:assert/strict';
+import { chromium } from 'playwright-core';
+import { UiTestHost } from './ui-test-host.mjs';
+
+class SecretKeyEditorCheck {
+  host = new UiTestHost();
+  fill = async (key, value) => this.page.evaluate(({ key, value }) => {
+    const field = document.getElementById('modalKeyInput');
+    field.value = key;
+    field.dispatchEvent(new CustomEvent('gv-input', { detail: { value: key }, bubbles: true }));
+    document.getElementById('modalValInput').value = value;
+  }, { key, value });
+  submit = async () => this.page.locator('#secretForm gv-action[type="submit"]').click();
+  run = async () => {
+    await this.host.init();
+    const base = await this.host.app.listen({ port: 0, host: '127.0.0.1' });
+    this.browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+    this.page = await this.browser.newPage({ viewport: { width: 1440, height: 1080 } });
+    await this.page.goto(base + '/dashboard');
+    await this.page.waitForFunction(() => window.app);
+    await this.page.evaluate(() => { window.app.switchMainTab('secrets'); window.app.modals.openSecretModal(); });
+    let posts = 0;
+    this.page.on('request', request => { if (request.url().endsWith('/api/vault/secret') && request.method() === 'POST') posts++; });
+    const input = this.page.locator('#modalKeyInput input');
+    await input.fill('internal host');
+    assert.equal(await input.inputValue(), 'INTERNAL_HOST');
+    assert.equal(await this.page.locator('#modalPreviewToken').innerText(), '$${<INTERNAL_HOST>}');
+    await this.page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await this.page.evaluate(() => navigator.clipboard.writeText('internal host'));
+    await input.fill(''); await input.press('Control+V');
+    await this.page.waitForFunction(() => document.getElementById('modalKeyInput').value === 'INTERNAL_HOST');
+    await input.evaluate(node => node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, composed: true })));
+    await this.fill('ime text', 'fixture.internal');
+    assert.equal(await input.inputValue(), 'ime text');
+    await input.evaluate(node => node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, composed: true })));
+    await this.page.waitForFunction(() => document.getElementById('modalKeyInput').value === 'IME_TEXT');
+    await input.fill('ABCD');
+    await input.evaluate(node => node.setSelectionRange(2, 2));
+    await input.press('x');
+    assert.equal(await input.inputValue(), 'ABXCD');
+    assert.equal(await input.evaluate(node => node.selectionStart), 3);
+    await input.fill('только!?');
+    assert.equal(await input.inputValue(), '');
+    await this.fill('', 'fixture.internal'); await this.submit();
+    assert.equal(posts, 0);
+    await this.fill('internal host', 'fixture.internal');
+    await this.page.screenshot({ path: '../docs/ux-research/copy-alignment-20261105/screenshots/normalized-key.png' });
+    await this.page.route('**/api/vault/secret', route => route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Bad Request', message: 'Содержательная ошибка имени' }) }));
+    await this.submit();
+    await this.page.waitForFunction(() => document.getElementById('secretFormError').textContent.includes('Содержательная ошибка имени'));
+    assert.equal(await this.page.locator('#modalValInput').evaluate(node => node.value), 'fixture.internal');
+    await this.page.evaluate(() => window.app.modals.closeSecretModal());
+    await this.page.locator('#modalKeyInput input').waitFor({ state: 'hidden' });
+    await this.page.evaluate(() => window.app.modals.openSecretModal());
+    assert.equal(await this.page.locator('#modalKeyInput').evaluate(node => node.value), 'INTERNAL_HOST');
+    assert.equal(await this.page.locator('#modalValInput').evaluate(node => node.value), 'fixture.internal');
+    await this.page.unroute('**/api/vault/secret');
+    await this.submit();
+    await this.page.waitForFunction(() => !document.getElementById('secretModal').open);
+    const vault = await (await fetch(base + '/api/vault')).json();
+    assert.ok(vault.manual.some(secret => secret.key === 'INTERNAL_HOST' && secret.realValue === 'fixture.internal'));
+    await input.waitFor({ state: 'hidden' });
+    await this.page.evaluate(() => window.app.modals.openSecretModal());
+    await this.fill('internal host', 'another.fixture');
+    const beforeDuplicate = posts;
+    await this.submit();
+    assert.equal(posts, beforeDuplicate);
+    assert.match(await this.page.locator('#modalKeyInput').evaluate(node => node.error), /уже существует/);
+    console.log('PASS input/paste normalization, IME boundary, preview, caret, unsupported empty no POST, API message, draft/value, uppercase save, normalized duplicate no POST');
+  };
+  close = async () => { await this.browser?.close(); await this.host.close(); };
+}
+const check = new SecretKeyEditorCheck();
+try { await check.run(); } finally { await check.close(); }

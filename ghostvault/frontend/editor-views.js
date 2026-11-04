@@ -2,10 +2,10 @@ import { Ui } from './ui-components.js';
 import { RuleTemplateView } from './rule-template-view.js';
 
 export class EditorViews {
-  static keyDescription = 'Например, для имени DB_HOST модель увидит $${<DB_HOST>} вместо секрета.';
+  static keyDescription = 'Например INTERNAL_HOST → $${<INTERNAL_HOST>}.';
   static shell = () => EditorViews.secret() + EditorViews.pattern();
   static secret = () => {
-    const key = Ui.field('modalKeyInput', 'Имя подстановки', '', 'required placeholder="DB_HOST" autocomplete="off"', EditorViews.keyDescription);
+    const key = Ui.field('modalKeyInput', 'Имя подстановки', '', 'required placeholder="INTERNAL_HOST" autocomplete="off"', EditorViews.keyDescription);
     const value = Ui.field('modalValInput', 'Секретное значение', '', 'type="textarea" rows="3" required placeholder="db.internal.example"', 'Вставьте текст, который нужно скрывать от модели. Например адрес базы db.internal.example.');
     const description = Ui.field('modalDescInput', 'Описание', '', 'placeholder="Для чего используется этот секрет"');
     const preview = '<p class="app-help"><span id="modalPreviewLabel">В запросе</span>: <code id="modalPreviewToken">$${&lt;KEY&gt;}</code></p>';
