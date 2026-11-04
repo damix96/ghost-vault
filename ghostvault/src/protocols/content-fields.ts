@@ -16,9 +16,9 @@ export class ContentFields {
     if (typeof body[key] !== 'string') return;
     try {
       const parsed = JSON.parse(body[key]);
-      body[key] = JSON.stringify(ContentFields.values(parsed, transform));
+      body[key] = JSON.stringify(ContentFields.values(parsed, text => transform(text, 'tool-arguments')));
     } catch {
-      body[key] = transform(body[key]);
+      body[key] = transform(body[key], 'tool-arguments');
     }
   };
 

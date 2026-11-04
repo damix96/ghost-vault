@@ -1,4 +1,4 @@
-export type TextTransform = (text: string) => string;
+export type TextTransform = (text: string, source?: 'tool-arguments') => string;
 export type Payload = Record<string, any>;
 
 export interface PayloadAdapter {

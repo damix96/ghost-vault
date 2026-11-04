@@ -14,7 +14,7 @@ export class AnthropicPayload implements PayloadAdapter {
       if (typeof block === 'string') return transform(block);
       if (!block || typeof block !== 'object') return block;
       if (block.type === 'text') ContentFields.text(block, 'text', transform);
-      if (['tool_use', 'server_tool_use'].includes(block.type)) block.input = ContentFields.values(block.input, transform);
+      if (['tool_use', 'server_tool_use'].includes(block.type)) block.input = ContentFields.values(block.input, text => transform(text, 'tool-arguments'));
       if (block.type === 'tool_result') block.content = this.content(block.content, transform);
       if (block.type === 'document' && block.source?.type === 'text') ContentFields.text(block.source, 'data', transform);
       return block;

@@ -29,7 +29,7 @@ await registerKit({ iconBase: new URL('./icons/', document.baseURI).href });
 | `gv-grid` / `GvGrid` | `columns='two'` (`one/two`) | Default slot; одна колонка ниже 48rem |
 | `gv-panel` / `GvPanel` | `heading/description=''` | Default slot; section/h2; не кнопка и не самостоятельный route |
 | `gv-page` / `GvPage` | `heading/description=''` | Default main + `actions` slot; один h1/main на страницу, `focus()` на h1 |
-| `gv-hint` / `GvHint` | `text/label=''`, `pinButton=false` (legacy, без визуального эффекта), `copyValue/secretKey=undefined` | Один default-slot control; `readState(): HintViewState`, `hide():void`, событие `gv-hint-state`; query immutable, hide без focus restore |
+| `gv-hint` / `GvHint` | `text/label=''`, `pinButton=false` (legacy, без визуального эффекта), `copyValue/secretKey=undefined`, `direction='outbound'` (`inbound` меняет подписи и порядок пары на «От модели / Приложению») | Один default-slot control; `readState(): HintViewState`, `hide():void`, событие `gv-hint-state`; query immutable, hide без focus restore |
 | `gv-dialog` / `GvDialog` | `heading=''`, `open=false`, `closeDisabled=false` (`close-disabled` attr) | Default content + `footer` slot; `show(trigger?,fallback?)`, `setReturnFocus(trigger?,fallback?)`, `hide():boolean`, `focus()`; locked close → false |
 | `gv-copy` / `GvCopy` | `value=''`, `label='Копировать'`, `compact=true` | Иконка с accessible name/tooltip; check + live status при успехе, текст при ошибке; `.compact=false` явно включает видимую подпись |
 | `gv-details` / `GvDetails` | `heading=''`, `open=false` (reflect) | Default slot остаётся mounted; ready wa-details, semantic `gv-toggle`, без arbitrary heading HTML |

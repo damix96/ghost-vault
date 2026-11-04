@@ -1,4 +1,5 @@
 import { RequestContext, ResponseContext } from '../hooks/types.js';
+import { ResponseChanges } from './response-change-evidence.js';
 
 export interface SecretInterception {
   key: string;
@@ -17,6 +18,7 @@ export interface TransactionContext {
   interceptedSecrets: SecretInterception[];
   timestamp: string;
   maskedPrompt?: string;
+  responseChanges?: ResponseChanges;
 }
 
 export interface TransactionRecord extends TransactionContext {

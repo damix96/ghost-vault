@@ -8,7 +8,7 @@ export class GeminiPayload implements PayloadAdapter {
   public part = (part: Payload, transform: TextTransform): void => {
     if (!part || typeof part !== 'object') return;
     if (!part.thought) ContentFields.text(part, 'text', transform);
-    if (part.functionCall?.args) part.functionCall.args = ContentFields.values(part.functionCall.args, transform);
+    if (part.functionCall?.args) part.functionCall.args = ContentFields.values(part.functionCall.args, text => transform(text, 'tool-arguments'));
     if (part.functionResponse?.response) part.functionResponse.response = ContentFields.values(part.functionResponse.response, transform);
     if (part.executableCode) ContentFields.text(part.executableCode, 'code', transform);
     if (part.codeExecutionResult) ContentFields.text(part.codeExecutionResult, 'output', transform);

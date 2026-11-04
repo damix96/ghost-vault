@@ -143,7 +143,7 @@ export class VaultStore {
 
   public getAllActiveSecrets = (): SecretEntry[] => [this.getManualSecrets(), this.getAutoSecrets()].flatMap(secrets => secrets.filter(secret => secret.maskInAi).sort((a, b) => b.realValue.length - a.realValue.length));
   public getSecretRepresentations = (secret: Pick<SecretEntry, 'alias'>): readonly SecretRepresentation[] => this.forms.get(secret.alias) || [];
-  public getInboundReplacements = () => [...this.forms.values()].flatMap(forms => forms.map(({ alias, value }) => ({ from: alias, to: value })));
+  public getInboundReplacements = (): Array<{ from: string; to: string; key?: string }> => [...this.manualSecrets.values(), ...this.autoSecrets.values(), ...this.archived].flatMap(secret => this.getSecretRepresentations(secret).map(({ alias, value }) => ({ from: alias, to: value, key: secret.key })));
   public maskManualText = (text: string): string => TextReplacer.replace(text, this.getManualSecrets(), this.getSecretRepresentations);
   public maskOutboundText = (text: string): string => TextReplacer.replace(this.maskManualText(text), this.getAutoSecrets(), this.getSecretRepresentations);
   public snapshot = () => {

@@ -6,6 +6,7 @@ import { ResponseContext } from '../hooks/types.js';
 import { EventBroadcaster } from '../telemetry/event-broadcaster.js';
 import { SseTransformer } from './sse-transformer.js';
 import { ResponseNormalizer } from './response-normalizer.js';
+import { ResponseChangeEvidence } from '../telemetry/response-change-evidence.js';
 
 export interface StreamIdentity {
   txId: string;
@@ -16,8 +17,8 @@ export interface StreamIdentity {
 export class StreamRelay {
   constructor(private vault: Pick<VaultStore, 'getInboundReplacements' | 'unmaskInboundText'>, private hooks: HookManager, private events: EventBroadcaster, private windowSize: number) {}
 
-  public run = async (upstream: Response, reply: FastifyReply, context: ResponseContext, identity: StreamIdentity, onValue: (text: string) => void, onProgress: (body: string, sample: string) => boolean = () => true) => {
-    const transformer = new SseTransformer(this.vault, this.windowSize, onValue);
+  public run = async (upstream: Response, reply: FastifyReply, context: ResponseContext, identity: StreamIdentity, onValue: (text: string) => void, onProgress: (body: string, sample: string) => boolean = () => true, evidence?: ResponseChangeEvidence) => {
+    const transformer = new SseTransformer(this.vault, this.windowSize, onValue, undefined, evidence);
     const decoder = new TextDecoder();
     let accumulatedText = '';
     let sampleStreamChunk = '';
@@ -28,6 +29,7 @@ export class StreamRelay {
       if (reply.raw.destroyed) throw new Error('Client disconnected');
       if (!sampleStreamChunk) sampleStreamChunk = text;
       const hooked = await this.hooks.runStreamChunk(text, { chunkIndex: totalChunks++, rawChunk: text, client: identity.client });
+      if (hooked !== text) evidence?.hookChanged();
       accumulatedText += hooked;
       if (!reply.raw.write(hooked)) await once(reply.raw, 'drain', { signal: AbortSignal.timeout(30000) });
       if (Date.now() - lastProgress < 250) return;
@@ -47,6 +49,7 @@ export class StreamRelay {
       }
       await write(transformer.push(decoder.decode()) + transformer.flush());
     } catch (error: any) {
+      evidence?.finish('interrupted');
       try { await write(transformer.flush(false)); } catch {}
       context.status = reply.raw.destroyed ? 499 : 502;
       const message = 'Stream interrupted: ' + String(error?.message || error);
@@ -60,6 +63,7 @@ export class StreamRelay {
       if (reply.raw.headersSent && !reply.raw.writableEnded && !reply.raw.destroyed) reply.raw.end();
     }
     context.body = accumulatedText;
+    evidence?.finish(context.status >= 400 ? 'interrupted' : 'complete');
     return { accumulatedText, sampleStreamChunk, totalChunks };
   };
 }

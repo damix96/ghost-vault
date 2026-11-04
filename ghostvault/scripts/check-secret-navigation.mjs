@@ -53,7 +53,7 @@ class SecretNavigationCheck {
     await this.show(this.autoAlias);
     const autoToken = this.page.locator('.app-change-text [data-secret-key]').first();
     await autoToken.click();
-    const panelToken = this.page.locator('.app-change-text gv-hint .title [data-secret-key]');
+    const panelToken = this.page.locator('.app-change-text gv-hint [data-secret-open]');
     await panelToken.click({ modifiers: ['Control'] });
     await this.destination(this.autoKey, 'auto');
     await this.page.keyboard.down('Control');

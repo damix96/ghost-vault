@@ -6,6 +6,7 @@ import './overview.css';
 import './management.css';
 import './typography.css';
 import './session-controls.css';
+import './exchange-reading.css';
 import { DashboardApp } from './app.js';
 
 try {

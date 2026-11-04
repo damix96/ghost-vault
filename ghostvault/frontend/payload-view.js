@@ -47,6 +47,7 @@ export class PayloadView {
     }
     const rest = Object.fromEntries(Object.entries(value).filter(([key]) => !processed.has(key)));
     if (Object.keys(rest).length && this.fields) html += this.technical(rest, path);
+    if (!role && !type && !value.functionCall && !value.functionResponse && (value.message || value.delta || (value.content && typeof value.content === 'object'))) return html;
     return Ui.message(title + (identity ? ' · ' + identity : ''), html || this.json(value), role === 'Ассистент' ? 'assistant' : '', path);
   };
 

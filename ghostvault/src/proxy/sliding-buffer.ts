@@ -1,3 +1,5 @@
+import { RestorationMatch } from '../telemetry/response-change-evidence.js';
+
 export class SlidingStreamTransformer {
   private buffer = '';
   private input = '';
@@ -6,8 +8,10 @@ export class SlidingStreamTransformer {
   private prefixes = new Set<string>();
   private pattern?: RegExp;
   private maxTokenLength: number;
+  private inputOffset = 0;
+  private outputOffset = 0;
 
-  constructor(replacements: Array<{ from: string; to: string }>, windowSize = 64) {
+  constructor(replacements: Array<{ from: string; to: string }>, windowSize = 64, private onReplace?: (match: RestorationMatch) => void) {
     const sorted = [...replacements].filter(value => value.from).sort((a, b) => b.from.length - a.from.length);
     this.values = new Map(sorted.map(({ from, to }) => [from, to]));
     this.maxTokenLength = Math.max(...sorted.map(value => value.from.length), 32);
@@ -44,5 +48,16 @@ export class SlidingStreamTransformer {
     return remaining;
   };
 
-  private replace = (text: string): string => this.pattern ? text.replace(this.pattern, value => this.values.get(value)!) : text;
+  private replace = (text: string): string => {
+    let difference = 0;
+    const result = this.pattern ? text.replace(this.pattern, (alias, start: number) => {
+      const value = this.values.get(alias)!;
+      this.onReplace?.({ alias, value, start: this.inputOffset + start, end: this.inputOffset + start + alias.length, outputStart: this.outputOffset + start + difference });
+      difference += value.length - alias.length;
+      return value;
+    }) : text;
+    this.inputOffset += text.length;
+    this.outputOffset += result.length;
+    return result;
+  };
 }

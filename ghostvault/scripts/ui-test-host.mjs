@@ -12,7 +12,7 @@ export class UiTestHost {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async value => { text = String(value); }, readText: async () => text } });
   });
 
-  init = async (seed = () => {}) => {
+  init = async (seed = () => {}, config = {}) => {
     try {
       if (process.env.UI_BUILD_DIR) {
         const source = this.root;
@@ -32,7 +32,7 @@ export class UiTestHost {
       ]);
       this.database = new VaultDatabase(':memory:');
       seed(this.database);
-      this.server = new GhostProxyServer(new VaultStore(this.database), { port: 0 });
+      this.server = new GhostProxyServer(new VaultStore(this.database), { port: 0, ...config });
       this.app = this.server.getApp();
       this.publicRoot = join(this.root, 'public');
     } catch (error) {

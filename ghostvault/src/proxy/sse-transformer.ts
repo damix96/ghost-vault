@@ -7,20 +7,23 @@ import { ChatStream } from '../protocols/chat-stream.js';
 import { AnthropicStream } from '../protocols/anthropic-stream.js';
 import { ResponsesStream } from '../protocols/responses-stream.js';
 import { GeminiStream } from '../protocols/gemini-stream.js';
+import { ResponseChangeEvidence } from '../telemetry/response-change-evidence.js';
 
 export class SseTransformer {
   private output: string[] = [];
   private sequence = 0;
   private buffers: StreamBuffers;
   private context: StreamContext;
+  private evidence?: ResponseChangeEvidence;
   private parser = createParser({ onEvent: event => this.handleEvent(event) });
 
-  constructor(vault: Pick<VaultStore, 'getInboundReplacements' | 'unmaskInboundText'>, windowSize: number, onValue: (text: string) => void, private adapters: StreamAdapter[] = [new ChatStream(), new AnthropicStream(), new ResponsesStream(), new GeminiStream()]) {
+  constructor(vault: Pick<VaultStore, 'getInboundReplacements' | 'unmaskInboundText'>, windowSize: number, onValue: (text: string) => void, private adapters: StreamAdapter[] = [new ChatStream(), new AnthropicStream(), new ResponsesStream(), new GeminiStream()], evidence?: ResponseChangeEvidence) {
+    this.evidence = evidence;
     const replacements = vault.getInboundReplacements();
     const inbound = new Map(replacements.map(({ from, to }) => [from, to]));
     const snapshot = { getInboundReplacements: () => replacements, unmaskInboundText: (text: string) => text.replace(/\$\$\{<[A-Z0-9_]+>\}/g, alias => inbound.get(alias) ?? alias) };
-    this.buffers = new StreamBuffers(snapshot, windowSize, onValue);
-    const transform = (text: string): string => { onValue(text); return snapshot.unmaskInboundText(text); };
+    this.buffers = new StreamBuffers(snapshot, windowSize, onValue, evidence);
+    const transform = (text: string): string => { onValue(text); return evidence ? evidence.restore(text, 'protocol-snapshot') : snapshot.unmaskInboundText(text); };
     const codec = new PayloadCodec();
     this.context = {
       write: this.write,
@@ -41,6 +44,7 @@ export class SseTransformer {
     if (event.data === '[DONE]') { this.buffers.flush(); this.write(event, event.data); return; }
     let body: any;
     try { body = JSON.parse(event.data); } catch { this.write(event, event.data); return; }
+    if (['error', 'response.failed', 'response.incomplete'].includes(body?.type) || body?.error) this.evidence?.finish('interrupted');
     const adapter = body && typeof body === 'object' ? this.adapters.find(candidate => candidate.matches(body)) : undefined;
     if (adapter) adapter.handle(body, event, this.context);
     else this.write(event, body && typeof body === 'object' ? body : event.data);

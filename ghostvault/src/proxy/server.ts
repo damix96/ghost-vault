@@ -21,6 +21,7 @@ import { TextReplacer } from '../vault/text-replacer.js';
 import { UpstreamClient } from './upstream-client.js';
 import { AdminAccess } from './admin-access.js';
 import { RuntimeSessions } from './runtime-sessions.js';
+import { ResponseChangeEvidence } from '../telemetry/response-change-evidence.js';
 
 const publicPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../public');
 
@@ -151,11 +152,12 @@ export class GhostProxyServer {
     const sessionId = this.sessionResolver.resolveSessionId(req, clientName);
     const incomingUrl = req.url;
     const started = new Date().toISOString();
-    const call = this.runtime.begin({ id: txId, sessionId, timestamp: started, request: { method: req.method, url: incomingUrl, headers: req.headers as Record<string, string>, body: req.body, client: clientName }, interceptedSecrets: [] });
+    let responseEvidence = new ResponseChangeEvidence([]);
+    const call = this.runtime.begin({ id: txId, sessionId, timestamp: started, request: { method: req.method, url: incomingUrl, headers: req.headers as Record<string, string>, body: req.body, client: clientName }, interceptedSecrets: [], responseChanges: responseEvidence.snapshot() });
     const retain = call.current;
     let lastRecord: TransactionRecord | undefined;
     const record = (transaction: TransactionRecord): void => {
-      lastRecord = { ...transaction, timestamp: started, request: { ...transaction.request, url: incomingUrl } };
+      lastRecord = { ...transaction, responseChanges: responseEvidence.snapshot(), timestamp: started, request: { ...transaction.request, url: incomingUrl } };
       call.update(lastRecord);
     };
     this.eventBroadcaster.broadcast({ id: txId + '-start', type: 'request_started', timestamp: new Date().toISOString(), client: clientName, details: { sessionId, transactionId: txId, endpoint: req.url } });
@@ -171,6 +173,7 @@ export class GhostProxyServer {
     reqCtx = await this.hookManager.runBeforeOutboundRequest(reqCtx);
 
     let inbound = this.vault.snapshot();
+    responseEvidence = new ResponseChangeEvidence(inbound.getInboundReplacements());
     let maskedBody: string | undefined = undefined;
     if (reqCtx.body !== undefined && reqCtx.body !== null) {
       const mapped = this.payloadCodec.request(reqCtx.body, reqCtx.url, text => {
@@ -181,6 +184,7 @@ export class GhostProxyServer {
       });
       maskedBody = typeof mapped === 'string' ? mapped : JSON.stringify(mapped);
       inbound = this.vault.snapshot();
+      responseEvidence = new ResponseChangeEvidence(inbound.getInboundReplacements());
       maskedBody = await this.hookManager.runAfterOutboundMask(maskedBody, reqCtx);
     }
 
@@ -200,6 +204,7 @@ export class GhostProxyServer {
     try {
       upstreamRes = await this.upstreamClient.fetch(targetUrl, { method: reqCtx.method, headers: reqCtx.headers, body: hasBody ? maskedBody : undefined, signal: disconnect.signal });
     } catch (err: any) {
+      responseEvidence.finish('not-processed');
       const errCtx: ResponseContext = { status: reply.raw.destroyed ? 499 : 502, headers: {}, body: String(err?.message || err), isStream: false, client: clientName };
       record({ id: txId, sessionId, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: errCtx, interceptedSecrets, timestamp: new Date().toISOString(), latencyMs: Math.round(performance.now() - startPerf), maskedPrompt: maskedBody });
       reply.status(502).send({ error: 'Gateway upstream connection failed', details: String(err) });
@@ -207,6 +212,7 @@ export class GhostProxyServer {
     }
 
     if (!upstreamRes.ok) {
+      responseEvidence.finish('not-processed');
       const errText = await upstreamRes.text();
       const errHeaders: Record<string, string> = {};
       upstreamRes.headers.forEach((val, key) => { errHeaders[key] = val; });
@@ -228,7 +234,7 @@ export class GhostProxyServer {
         if (!retain()) return false;
         record({ id: txId, sessionId, timestamp: started, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: { ...resCtx, body }, maskedPrompt: maskedBody, interceptedSecrets, sampleStreamChunk });
         return true;
-      });
+      }, responseEvidence);
       record({ id: txId, sessionId, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: resCtx, sampleStreamChunk, sampleStreamChunkIndex: 0, interceptedSecrets, timestamp: new Date().toISOString(), latencyMs: Math.round(performance.now() - startPerf), maskedPrompt: maskedBody });
       await this.hookManager.runAfterStream({ totalChunks, accumulatedText, client: clientName });
       return;
@@ -236,14 +242,16 @@ export class GhostProxyServer {
 
     const responseText = await upstreamRes.text();
     const processedRaw = await this.hookManager.runBeforeInboundResponse(responseText, resCtx);
-    const unmask = (text: string): string => {
+    const unmask = (text: string, source?: 'tool-arguments'): string => {
       if (retain()) this.checkAndRecord(text, clientName, interceptedSecrets, 'inbound');
-      return inbound.unmaskInboundText(text);
+      return responseEvidence.restore(text, source || 'response-field');
     };
     let unmaskedResponse: string;
     try { unmaskedResponse = JSON.stringify(this.payloadCodec.response(JSON.parse(processedRaw), unmask)); }
     catch { unmaskedResponse = unmask(processedRaw); }
     const finalResponse = await this.hookManager.runAfterInboundUnmask(unmaskedResponse, resCtx);
+    if (finalResponse !== unmaskedResponse) responseEvidence.hookChanged();
+    responseEvidence.finish('complete');
 
     try {
       const parsedJson = JSON.parse(finalResponse);
@@ -256,6 +264,7 @@ export class GhostProxyServer {
 
     record({ id: txId, sessionId, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: resCtx, interceptedSecrets, timestamp: new Date().toISOString(), latencyMs: Math.round(performance.now() - startPerf), maskedPrompt: maskedBody });
     } catch (error) {
+      responseEvidence.finish('interrupted');
       record({ id: txId, sessionId, timestamp: started, request: reqCtx, interceptedSecrets, response: { status: reply.raw.destroyed ? 499 : Number((error as { statusCode?: number }).statusCode) || 500, headers: {}, body: { error: 'Gateway request failed' }, isStream: false, client: clientName }, latencyMs: Math.round(performance.now() - startPerf) });
       throw error;
     } finally {

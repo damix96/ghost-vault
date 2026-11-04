@@ -116,8 +116,8 @@ export class Overview {
     if (!editing && event.type === 'stream_progress' && details.sessionId === this.selectedSession && this.pending.get(details.transactionId)?.route === this.app.connections.workspace.selected && details.text) {
       const preview = document.getElementById('overviewStream');
       preview.dataset.transaction = details.transactionId;
-      preview.hidden = false;
-      document.getElementById('overviewStreamText').textContent = details.text;
+      preview.hidden = true;
+      document.getElementById('overviewStreamText').textContent = '';
     }
     if (!editing) {
       this.renderActivity();

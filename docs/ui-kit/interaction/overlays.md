@@ -37,6 +37,8 @@ Preview связан accessible description в scope anchor; текст имее
 
 Legacy pin attributes не включают дополнительные кнопки; новые consumers их не используют.
 
+Пара значений: `copyValue` — точное исходное значение, `label` — точная подстановка. `direction="inbound"` выводит «От модели» (подстановка), затем «Приложению» (исходное); default `outbound` сохраняет «Было / Ушло». Причина: восстановление имеет обратное направление; цель — исключить ложный смысл пары при неизменных copy payload. `secretKey` необязателен: без доступной записи копирование остаётся, переход к секрету отсутствует. Направление не выводится из текста/совпадения; его задаёт consumer на основании доказанной операции.
+
 ## Наблюдение из приложения
 
 Контракт `migration-hint-04`: `hint.readState()` возвращает frozen readonly `HintViewState {mode,open,pinned}`. Initial closed/false/false; open означает логический preview/pinned, не подтверждение placement/animation. Snapshot не меняется сам: для нового состояния вызвать метод снова. Getter с single-return block не добавлен из-за engineering-style; состояние модели не раскрывается.

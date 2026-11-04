@@ -16,7 +16,7 @@ export class ResponsesPayload implements PayloadAdapter {
         ? ContentFields.values(item.output, transform)
         : ContentFields.content(item.output, transform);
     }
-    if (item.type === 'custom_tool_call') ContentFields.text(item, 'input', transform);
+    if (item.type === 'custom_tool_call') ContentFields.text(item, 'input', text => transform(text, 'tool-arguments'));
     if (item.type === 'reasoning') {
       item.summary = ContentFields.content(item.summary, transform);
       for (const part of item.summary || []) if (part?.type === 'summary_text') ContentFields.text(part, 'text', transform);
