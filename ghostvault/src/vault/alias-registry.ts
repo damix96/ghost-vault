@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomInt, randomUUID } from 'node:crypto';
 import { SecretEntry } from '../types/index.js';
 import { SecretRepresentation, SecretRepresentations } from './secret-representations.js';
 
@@ -9,7 +9,7 @@ export class AliasConflict extends Error {
 }
 
 export class AliasRegistry {
-  constructor(private db: DatabaseSync, public randomSuffix = () => randomBytes(6).toString('hex').toUpperCase()) {
+  constructor(private db: DatabaseSync, public randomSuffix = () => randomInt(36 ** 6).toString(36).toUpperCase().padStart(6, '0')) {
     db.exec('CREATE TABLE IF NOT EXISTS alias_registry (alias_hash TEXT PRIMARY KEY, owner TEXT NOT NULL, form INTEGER NOT NULL, alias TEXT); CREATE INDEX IF NOT EXISTS alias_registry_owner ON alias_registry(owner);');
     db.exec('CREATE TABLE IF NOT EXISTS reconstructed_alias_owners (owner TEXT PRIMARY KEY);');
   }

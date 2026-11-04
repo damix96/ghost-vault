@@ -40,7 +40,7 @@ class SecretLabelTests {
     const rule = engine.addPattern('template', '(?<protocol>postgres):([^ ]+)', 'uri', 'DB_HUB_$protocol_$1')!;
     engine.scanAndAutoDetect('postgres:synthetic-db', (value, type, prefix) => this.vault.registerAutoDetectedSecret(value, type, prefix));
     const entry = this.vault.findByValue('postgres:synthetic-db')!;
-    assert.match(entry.key, /^DB_HUB_POSTGRES_POSTGRES_[A-F0-9]{12}$/);
+    assert.match(entry.key, /^DB_HUB_POSTGRES_POSTGRES_[A-Z0-9]{6}$/);
     assert.equal(this.vault.unmaskInboundText(this.vault.maskOutboundText('postgres:synthetic-db')), 'postgres:synthetic-db');
     engine.updatePattern(rule.id, { ...rule, label_template: 'CHANGED_$1' });
     engine.scanAndAutoDetect('postgres:synthetic-db', (value, type, prefix) => this.vault.registerAutoDetectedSecret(value, type, prefix));
@@ -49,12 +49,12 @@ class SecretLabelTests {
 
   private allocation = (): void => {
     const random = this.db.aliases.randomSuffix;
-    this.db.aliases.randomSuffix = () => 'AAAAAAAAAAAA';
+    this.db.aliases.randomSuffix = () => 'AAAAAA';
     const first = this.vault.registerAutoDetectedSecret('synthetic-first', 'collision');
     assert.throws(() => this.vault.registerAutoDetectedSecret('synthetic-second', 'collision'), /уникальную/);
     assert.equal(this.vault.unmaskInboundText(first.alias), first.realValue);
     let calls = 0;
-    this.db.aliases.randomSuffix = () => calls++ ? 'BBBBBBBBBBBB' : 'AAAAAAAAAAAA';
+    this.db.aliases.randomSuffix = () => calls++ ? 'BBBBBB' : 'AAAAAA';
     const second = this.vault.registerAutoDetectedSecret('synthetic-second', 'collision');
     assert.notEqual(second.alias, first.alias);
     assert.equal(calls, 2);
@@ -131,7 +131,7 @@ class SecretLabelTests {
       const previewInput = { ...input, snapshot: new Date(Date.now() + 1000).toISOString() };
       const preview = await app.inject({ method: 'POST', url: '/api/pattern-preview', payload: previewInput });
       assert.equal(preview.statusCode, 200);
-      assert.match(preview.json().results[0].alias, /^\$\$\{<DB_REDIS_SYNTHETIC_[A-F0-9]{12}>\}$/);
+      assert.match(preview.json().results[0].alias, /^\$\$\{<DB_REDIS_SYNTHETIC_[A-Z0-9]{6}>\}$/);
       assert.equal(preview.json().results[0].existing, false);
       const entry = this.vault.registerAutoDetectedSecret('redis:synthetic', 'uri');
       const repeated = await app.inject({ method: 'POST', url: '/api/pattern-preview', payload: previewInput });
@@ -236,7 +236,7 @@ class SecretLabelTests {
     assert.equal(migrated.getPatterns()[0].label_template, null);
     const migratedStore = new VaultStore(migrated);
     new PatternEngine(migrated).scanAndAutoDetect('synthetic', (value, type, prefix) => migratedStore.registerAutoDetectedSecret(value, type, prefix));
-    assert.match(migratedStore.getAutoSecrets()[0].alias, /^\$\$\{<AUTO_CUSTOM_[A-F0-9]{12}>\}$/);
+    assert.match(migratedStore.getAutoSecrets()[0].alias, /^\$\$\{<AUTO_CUSTOM_[A-Z0-9]{6}>\}$/);
     migrated.close();
     const conflicting = new VaultDatabase(':memory:');
     conflicting.upsertSecret({ key: 'CONFLICT', real_value: 'synthetic-manual', alias: '$${<CONFLICT>}', mask_in_ai: 1, description: '', created_at: '', updated_at: '' });

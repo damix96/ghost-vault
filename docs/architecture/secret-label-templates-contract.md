@@ -48,7 +48,7 @@
 
 Почему: случайность не исключает коллизий, а раздельные таблицы не обеспечивали общий namespace. Для чего: выданный token никогда не обозначает другой original. Как: общий `alias_registry` с `PRIMARY KEY(alias_hash)`, SHA-256 полного alias, opaque owner UUID, индекс формы и nullable открытый alias. Allocation выполняется в `BEGIN IMMEDIATE`; память публикуется после commit. Почему не иначе: проверка с последующей независимой вставкой допускает гонку, `INSERT OR REPLACE` уничтожает старую связь.
 
-- Автоматический suffix: 6 bytes `crypto.randomBytes`, 12 uppercase hex символов. До 16 попыток при конфликте; далее 503 `ALIAS_ALLOCATION_EXHAUSTED`. Запрос не уходит upstream без защиты.
+- Автоматический suffix: 6 uppercase base36 символов `[A-Z0-9]`: `crypto.randomInt(36 ** 6)`, base36 с дополнением слева нулями. До 16 попыток при конфликте; далее 503 `ALIAS_ALLOCATION_EXHAUSTED`. Запрос не уходит upstream без защиты.
 - Общее пространство: manual, auto, raw и URL/Base64/JSON/slash формы. Derived aliases сохраняются, не перенумеровываются при последующем изменении набора записей.
 - Новые auto резервируют только hashes aliases, owner UUID и порядковые номера форм. Ни original, ни открытая wire label в registry для них не сохраняются. Это резервирование, не восстановимый mapping.
 - Manual/legacy сохраняют открытые aliases форм в registry для стабильной загрузки. Originals находятся в прежних таблицах или manual version archive.
@@ -78,3 +78,5 @@
 5. Rollback старого binary поверх мигрированной БД небезопасен: старый allocator игнорирует registry, не загружает manual archives, может писать auto originals и переназначать tokens. Предпочтителен исправляющий новый binary. Полный rollback требует согласованной пары backup БД + старый binary/dependencies и означает потерю созданных после backup mappings/версий; не выполнять молча.
 
 Издержки: registry хранит tombstones без автоматической очистки, растёт с количеством выданных форм; manual archive хранит прежние originals. Это цена запрета переиспользования и восстановления старых ответов. Изменение retention/tombstone cleanup требует нового контракта.
+
+Короткий suffix уменьшает длину метки; уникальность обеспечивает атомарный registry, а не длина случайной строки. При коллизии длина/алфавит не меняются. Ранее выданные метки не переименовываются; дедупликация сохраняет существующий alias.
