@@ -22,7 +22,14 @@ import { UpstreamClient } from './upstream-client.js';
 import { AdminAccess } from './admin-access.js';
 import { RuntimeSessions } from './runtime-sessions.js';
 import { ResponseChangeEvidence } from '../telemetry/response-change-evidence.js';
+import { ProtectedResponseProjection } from '../telemetry/protected-response-projection.js';
 import { RuntimeActivity } from '../runtime/activity.js';
+import { SecretInputPages } from '../secret-input/pages.js';
+import { SecretInputEndpoint } from '../secret-input/endpoint.js';
+import { SecretInputManager } from '../secret-input/manager.js';
+import { VaultSecretInputStorage } from '../secret-input/storage.js';
+import { SecretInputBrowser } from '../secret-input/browser-launcher.js';
+import { ProtectedEvents } from '../secret-input/protected-events.js';
 
 const publicPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../public');
 
@@ -40,18 +47,17 @@ export class GhostProxyServer {
   private vault: VaultStore;
   private patternEngine: PatternEngine;
   private hookManager: HookManager;
-  private eventBroadcaster = new EventBroadcaster();
+  private eventBroadcaster = new ProtectedEvents(event => this.vault.redactProtected(event), text => this.vault.redactProtectedPreview(text));
   private hookSandbox: HookSandbox;
   private dashboardApi: DashboardApi;
   private sessionResolver = new SessionResolver();
   private payloadCodec = new PayloadCodec();
   private upstreamClient = new UpstreamClient();
-  private runtime = new RuntimeSessions(undefined, (sessionId, reason) => this.eventBroadcaster.broadcast({ id: crypto.randomUUID(), type: 'session_removed', timestamp: new Date().toISOString(), client: '', details: { sessionId, reason } }));
+  private runtime = new RuntimeSessions(undefined, (sessionId, reason) => this.eventBroadcaster.broadcast({ id: crypto.randomUUID(), type: 'session_removed', timestamp: new Date().toISOString(), client: '', details: { sessionId, reason } }), undefined, record => this.vault.redactProtected(record));
   private config: GhostVaultConfig;
   private startTime = Date.now();
   private activity = new RuntimeActivity();
-
-  constructor(vault?: VaultStore, config?: Partial<GhostVaultConfig>, hookManager?: HookManager) {
+  constructor(vault?: VaultStore, config?: Partial<GhostVaultConfig>, hookManager?: HookManager, inputBrowser?: SecretInputBrowser) {
     this.vault = vault ?? new VaultStore();
     this.patternEngine = new PatternEngine(this.vault.getDatabase());
     this.hookManager = hookManager ?? new HookManager();
@@ -59,10 +65,12 @@ export class GhostProxyServer {
     this.config = { port: 8765, host: '127.0.0.1', targetApiBase: 'https://api.anthropic.com', confirmationMode: 'auto', storagePath: '', maxBufferWindowChars: 64, ...config };
     if (this.config.hooksDir) this.hookManager.loadHooksFromDir(this.config.hooksDir);
     this.app = Fastify({ logger: false });
+    new SecretInputEndpoint(this.app, new SecretInputManager(new VaultSecretInputStorage(this.vault), inputBrowser)).register();
     const adminAccess = new AdminAccess(this.config.host);
     adminAccess.install(this.app);
     this.app.register(cors, { delegator: adminAccess.cors });
     this.app.register(fastifyStatic, { root: publicPath, prefix: '/', wildcard: false, index: false });
+    new SecretInputPages(this.app).register();
     this.dashboardApi = new DashboardApi(
       this.app, this.vault, this.patternEngine, this.hookManager, this.eventBroadcaster, this.hookSandbox,
       () => this.startTime, this.getLastCall, this.getLastTransactionContext,
@@ -79,6 +87,7 @@ export class GhostProxyServer {
 
   public getApp = (): FastifyInstance => this.app;
   public getVault = (): VaultStore => this.vault;
+  public getSecretInput = (): SecretInputManager => this.app.getDecorator<SecretInputManager>('secretInput');
   public getPatternEngine = (): PatternEngine => this.patternEngine;
   public getHookManager = (): HookManager => this.hookManager;
   public getEventBroadcaster = (): EventBroadcaster => this.eventBroadcaster;
@@ -88,31 +97,29 @@ export class GhostProxyServer {
     const secret = record?.interceptedSecrets.at(-1);
     return record && secret ? { direction: secret.direction, client: record.request.client, timestamp: record.timestamp, rawUrl: secret.realValue, alias: secret.alias, key: secret.key } : null;
   };
-  public getLastTransactionContext = (): TransactionRecord | null => this.runtime.records()[0] || null;
-  public getTransactionHistory = (): TransactionRecord[] => this.runtime.records();
-  public getTransactionById = (id: string): TransactionRecord | undefined => this.runtime.find(id);
+  public getLastTransactionContext = (): TransactionRecord | null => this.vault.redactProtected(this.runtime.records()[0] || null);
+  public getTransactionHistory = (): TransactionRecord[] => this.vault.redactProtected(this.runtime.records());
+  public getTransactionById = (id: string): TransactionRecord | undefined => this.vault.redactProtected(this.runtime.find(id));
   public getUpstreamSettings = () => new RouteRegistry(this.vault.getDatabase()).getSettings();
   public setUpstreamSettings = (settings: Record<string, string | undefined>) => new RouteRegistry(this.vault.getDatabase()).updateSettings(settings);
   public listen = async (): Promise<string> =>
     this.app.listen({ port: this.config.port, host: this.config.host });
   public drain = async (timeoutMs = 5000): Promise<void> => this.activity.drain(timeoutMs);
   public abortRequests = (): void => this.activity.abort();
-  public close = async (): Promise<void> => { this.activity.stopAdmission(); this.eventBroadcaster.close(); await this.activity.drain(); await this.app.close(); this.runtime.clear(); };
-
+  public closeSecretInput = (): Promise<void> => this.app.hasDecorator('secretInputEndpoint') ? this.app.getDecorator<SecretInputEndpoint>('secretInputEndpoint').close() : Promise.resolve();
+  public close = async (): Promise<void> => { this.activity.stopAdmission(); this.eventBroadcaster.close(); await Promise.all([this.closeSecretInput(), this.activity.drain()]); await this.app.close(); this.runtime.clear(); };
   public clearTransactionHistory = (sessionId?: string): void => {
     this.runtime.clear(sessionId);
     if (sessionId === undefined) this.eventBroadcaster.broadcast({ id: crypto.randomUUID(), type: 'sessions_cleared', timestamp: new Date().toISOString(), client: '', details: {} });
   };
 
   public recordTransaction = (record: TransactionRecord): void => {
-    this.runtime.record(record);
+    this.runtime.record(this.vault.redactProtected(record));
     this.completed(record, true);
   };
 
   private completed = (record: TransactionRecord, latest: boolean): void => this.eventBroadcaster.broadcast({ id: record.id, type: 'transaction_completed', timestamp: record.timestamp, client: record.request.client, details: { sessionId: record.sessionId || record.id, transactionId: record.id, latest, status: record.response?.status, endpoint: record.request.url, targetUrl: record.targetUrl, latencyMs: record.latencyMs, secretCount: record.interceptedSecrets.length } });
-
   public executeTestPing = (): TransactionRecord => this.dashboardApi.executeTestPing();
-
   private recordInterception = (direction: 'outbound' | 'inbound', client: string, secret: SecretEntry): void => {
     this.eventBroadcaster.broadcast({
       id: crypto.randomUUID(),
@@ -145,7 +152,6 @@ export class GhostProxyServer {
   private executeProxy = async (req: FastifyRequest, reply: FastifyReply, signal: AbortSignal): Promise<void> => {
     signal.throwIfAborted();
     if (req.url.startsWith('/api/')) { reply.status(404).send({ error: 'Unknown API endpoint' }); return; }
-
     const startPerf = performance.now();
     const staticCandidate = req.url === '/' ? 'index.html' : req.url.replace(/^\/+/, '');
     if (req.method === 'GET' && existsSync(path.join(publicPath, staticCandidate))) {
@@ -166,12 +172,13 @@ export class GhostProxyServer {
     const sessionId = this.sessionResolver.resolveSessionId(req, clientName);
     const incomingUrl = req.url;
     const started = new Date().toISOString();
-    let responseEvidence = new ResponseChangeEvidence([]);
-    const call = this.runtime.begin({ id: txId, sessionId, timestamp: started, request: { method: req.method, url: incomingUrl, headers: req.headers as Record<string, string>, body: req.body, client: clientName }, interceptedSecrets: [], responseChanges: responseEvidence.snapshot() });
+    let responseEvidence = new ResponseChangeEvidence([], text => this.vault.projectProtectedText(text));
+    const responseProjection = new ProtectedResponseProjection(this.vault.snapshot().diagnostics, responseEvidence);
+    const call = this.runtime.begin(this.vault.redactProtected({ id: txId, sessionId, timestamp: started, request: { method: req.method, url: incomingUrl, headers: req.headers as Record<string, string>, body: req.body, client: clientName }, interceptedSecrets: [], responseChanges: responseEvidence.snapshot() }), responseProjection);
     const retain = call.current;
     let lastRecord: TransactionRecord | undefined;
     const record = (transaction: TransactionRecord): void => {
-      lastRecord = { ...transaction, responseChanges: responseEvidence.snapshot(), timestamp: started, request: { ...transaction.request, url: incomingUrl } };
+      lastRecord = responseProjection.project({ ...transaction, responseChanges: responseEvidence.snapshot(), timestamp: started, request: { ...transaction.request, url: incomingUrl } });
       call.update(lastRecord);
     };
     this.eventBroadcaster.broadcast({ id: txId + '-start', type: 'request_started', timestamp: new Date().toISOString(), client: clientName, details: { sessionId, transactionId: txId, endpoint: req.url } });
@@ -188,7 +195,7 @@ export class GhostProxyServer {
     signal.throwIfAborted();
 
     let inbound = this.vault.snapshot();
-    responseEvidence = new ResponseChangeEvidence(inbound.getInboundReplacements());
+    responseEvidence = new ResponseChangeEvidence(inbound.getInboundReplacements(), inbound.diagnostics.project); responseProjection.bind(inbound.diagnostics, responseEvidence);
     let maskedBody: string | undefined = undefined;
     if (reqCtx.body !== undefined && reqCtx.body !== null) {
       const mapped = this.payloadCodec.request(reqCtx.body, reqCtx.url, text => {
@@ -199,7 +206,7 @@ export class GhostProxyServer {
       });
       maskedBody = typeof mapped === 'string' ? mapped : JSON.stringify(mapped);
       inbound = this.vault.snapshot();
-      responseEvidence = new ResponseChangeEvidence(inbound.getInboundReplacements());
+      responseEvidence = new ResponseChangeEvidence(inbound.getInboundReplacements(), inbound.diagnostics.project); responseProjection.bind(inbound.diagnostics, responseEvidence);
       maskedBody = await this.hookManager.runAfterOutboundMask(maskedBody, reqCtx);
       signal.throwIfAborted();
     }
@@ -248,7 +255,7 @@ export class GhostProxyServer {
         if (!retain()) return false;
         record({ id: txId, sessionId, timestamp: started, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: { ...resCtx, body }, maskedPrompt: maskedBody, interceptedSecrets, sampleStreamChunk });
         return true;
-      }, signal, responseEvidence);
+      }, signal, responseEvidence, responseProjection.preview);
       record({ id: txId, sessionId, targetProvider, targetUrl, request: { ...reqCtx, targetUrl }, response: resCtx, sampleStreamChunk, sampleStreamChunkIndex: 0, interceptedSecrets, timestamp: new Date().toISOString(), latencyMs: Math.round(performance.now() - startPerf), maskedPrompt: maskedBody });
       signal.throwIfAborted();
       await this.hookManager.runAfterStream({ totalChunks, accumulatedText, client: clientName });

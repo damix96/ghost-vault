@@ -1,6 +1,6 @@
 {
   "name": "ghostvault",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI-Native Secrets Vault & Zero-Knowledge In-Flight Masking Proxy",
   "type": "module",
   "main": "dist/index.js",
@@ -26,9 +26,14 @@
     "test": "node scripts/run-tests.mjs",
     "test:retention": "node scripts/run-tests.mjs test-runtime-retention test-runtime-sessions-api",
     "test:labels": "node scripts/run-tests.mjs test-secret-labels",
+    "test:secret-providers": "node scripts/run-tests.mjs test-secret-providers",
+    "test:secret-storage": "node scripts/run-tests.mjs test-protected-storage test-protected-batch test-protected-api test-protected-hygiene test-protected-unicode test-protected-nul test-protected-preview test-protected-text-projection test-protected-snapshot-diagnostics test-masking-composite",
+    "test:secret-input:core": "node scripts/run-tests.mjs test-secret-input-access test-secret-input-launch test-secret-input-manager test-secret-input-mcp test-secret-input-retention test-secret-input-projection",
+    "test:secret-input:integration": "node scripts/run-tests.mjs test-secret-input-storage test-secret-input-pages test-secret-input-http test-secret-input-mcp-http test-secret-input-vault test-secret-input-runtime test-secret-input-events test-secret-input-notice test-secret-input-preview test-secret-input-preview-stream test-protected-response-evidence",
+    "test:secrets": "npm run test:secret-providers && npm run test:secret-storage && npm run test:secret-input:core && npm run test:secret-input:integration",
     "test:composite": "node scripts/run-tests.mjs test-composite-replacements",
     "test:admin": "node scripts/run-tests.mjs test-admin-regressions",
-    "test:response-evidence": "node scripts/run-tests.mjs test-response-change-evidence",
+    "test:response-evidence": "node scripts/run-tests.mjs test-response-change-evidence test-protected-response-evidence",
     "test:e2e": "node dist/e2e-runner.js",
     "mcp": "node dist/mcp/index.js",
     "mcp:bridge": "node dist/runtime/cli.js mcp-bridge",
@@ -42,7 +47,7 @@
     "test:setup": "node dist/setup/test-setup.js && node dist/setup/test-autostart.js",
     "test:mcp:bridge": "node dist/test-mcp-bridge.js",
     "test:variables": "node scripts/run-tests.mjs test-mutable-variables test-variable-migration test-variable-reclaim test-variable-requests test-variable-export test-secret-labels",
-    "test:all": "npm test && npm run test:variables && npm run test:mcp:agent && npm run test:mcp:bridge && npm run test:runtime && npm run test:shutdown && npm run test:setup && npm run test:retention",
+    "test:all": "npm test && npm run test:variables && npm run test:mcp:agent && npm run test:mcp:bridge && npm run test:runtime && npm run test:shutdown && npm run test:setup && npm run test:retention && npm run test:secrets",
     "verify:release": "node scripts/verify-release.mjs",
     "test:shutdown": "node dist/runtime/test-shutdown-network.js && node dist/runtime/test-shutdown-hooks.js && node dist/runtime/test-shutdown-backpressure.js"
   },
@@ -62,23 +67,25 @@
     "@fastify/cors": "^10.1.0",
     "@fastify/static": "^10.1.5",
     "@modelcontextprotocol/sdk": "^1.31.0",
+    "@napi-rs/keyring": "2.1.2",
+    "@primno/dpapi": "2.0.1",
     "eventsource-parser": "^4.1.1",
     "fastify": "^5.2.1",
     "highlight.js": "11.12.0",
     "ip-regex": "5.0.0",
-    "slugify": "1.6.9",
     "semver": "7.8.6",
+    "slugify": "1.6.9",
     "smol-toml": "1.9.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@ghostvault/ui-kit": "file:../ui-kit",
     "@types/node": "^22.13.10",
     "@types/semver": "7.8.0",
     "playwright-core": "1.63.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
-    "vite": "8.3.5",
-    "@ghostvault/ui-kit": "file:../ui-kit"
+    "vite": "8.3.5"
   },
   "engines": {
     "node": ">=22.13.0"

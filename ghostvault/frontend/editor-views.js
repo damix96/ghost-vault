@@ -6,12 +6,12 @@ export class EditorViews {
   static shell = () => EditorViews.secret() + EditorViews.pattern();
   static secret = () => {
     const key = Ui.field('modalKeyInput', 'Имя подстановки', '', 'required placeholder="INTERNAL_HOST" autocomplete="off"', EditorViews.keyDescription);
-    const value = Ui.field('modalValInput', 'Секретное значение', '', 'type="textarea" rows="3" required placeholder="db.internal.example"', 'Вставьте текст, который нужно скрывать от модели. Например адрес базы db.internal.example.');
+    const value = Ui.field('modalValInput', 'Значение', '', 'type="textarea" rows="3" required placeholder="db.internal.example"', 'Вставьте текст, который нужно скрывать от модели. Например адрес базы db.internal.example.');
     const description = Ui.field('modalDescInput', 'Описание', '', 'placeholder="Для чего используется этот секрет"');
     const preview = '<p class="app-help"><span id="modalPreviewLabel">В запросе</span>: <code id="modalPreviewToken">$${&lt;KEY&gt;}</code></p>';
-    const help = '<p class="app-condition"><strong>Хранение без шифрования.</strong>Секрет сохраняется на этом компьютере.</p>';
-    const actions = '<div class="app-form-actions"><gv-action id="cancelModalBtn" label="Закрыть"></gv-action>' + Ui.submit('Сохранить секрет') + '</div>';
-    return `<gv-dialog id="secretModal" heading="Добавить секрет"><form id="secretForm" novalidate><gv-stack>${Ui.feedback('secretFormError')}${key}${value}${description}${preview}${help}<p id="secretSaveEffect" class="app-help"></p>${actions}</gv-stack></form></gv-dialog>`;
+    const help = '<p id="secretStorageNote" class="app-condition"><strong>Хранение без шифрования.</strong>Значение сохраняется на этом компьютере.</p>';
+    const actions = '<div class="app-form-actions"><gv-action id="cancelModalBtn" label="Закрыть"></gv-action>' + Ui.submit('Сохранить переменную') + '</div>';
+    return `<gv-dialog id="secretModal" heading="Добавить переменную"><form id="secretForm" novalidate><gv-stack>${Ui.feedback('secretFormError')}${key}${value}${description}${preview}${help}<p id="secretSaveEffect" class="app-help"></p>${actions}</gv-stack></form></gv-dialog>`;
   };
   static pattern = () => {
     const name = Ui.field('patternNameInput', 'Название', '', 'required placeholder="Токены моей системы"');

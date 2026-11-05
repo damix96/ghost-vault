@@ -5,6 +5,7 @@ interface Replacement {
   start: number;
   end: number;
   alias: string;
+  priority: number;
 }
 
 export class TextReplacer {
@@ -22,15 +23,15 @@ export class TextReplacer {
         seen.add(variant);
         let offset = 0;
         while ((offset = text.indexOf(variant, offset)) >= 0) {
-          candidates.push({ start: offset, end: offset + variant.length, alias });
+          candidates.push({ start: offset, end: offset + variant.length, alias, priority: secret.storage === 'manual' ? 1 : 0 });
           offset += variant.length;
         }
       }
     }
-    candidates.sort((a, b) => (b.end - b.start) - (a.end - a.start));
+    candidates.sort((a, b) => b.priority - a.priority || (b.end - b.start) - (a.end - a.start));
     const accepted: Replacement[] = [];
     for (const match of candidates) {
-      if ([...protectedRanges, ...accepted].some(range => match.start < range.end && match.end > range.start)) continue;
+      if (protectedRanges.some(range => match.start >= range.start && match.end <= range.end) || accepted.some(range => match.start < range.end && match.end > range.start)) continue;
       accepted.push(match);
     }
     accepted.sort((a, b) => a.start - b.start);

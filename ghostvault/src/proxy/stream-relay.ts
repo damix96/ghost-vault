@@ -17,7 +17,7 @@ export interface StreamIdentity {
 export class StreamRelay {
   constructor(private vault: Pick<VaultStore, 'getInboundReplacements' | 'unmaskInboundText'>, private hooks: HookManager, private events: EventBroadcaster, private windowSize: number) {}
 
-  public run = async (upstream: Response, reply: FastifyReply, context: ResponseContext, identity: StreamIdentity, onValue: (text: string) => void, onProgress: (body: string, sample: string) => boolean = () => true, signal?: AbortSignal, evidence?: ResponseChangeEvidence) => {
+  public run = async (upstream: Response, reply: FastifyReply, context: ResponseContext, identity: StreamIdentity, onValue: (text: string) => void, onProgress: (body: string, sample: string) => boolean = () => true, signal?: AbortSignal, evidence?: ResponseChangeEvidence, projectPreview: (text: string) => string | undefined = text => text) => {
     const transformer = new SseTransformer(this.vault, this.windowSize, onValue, undefined, evidence);
     const decoder = new TextDecoder();
     let accumulatedText = '';
@@ -39,7 +39,9 @@ export class StreamRelay {
       if (!onProgress(accumulatedText, sampleStreamChunk)) return;
       const normalized = ResponseNormalizer.normalize(accumulatedText);
       const preview = (normalized?.content || []).filter((block: any) => block.type === 'text').map((block: any) => block.text).join('');
-      this.events.broadcast({ id: identity.txId + '-progress-' + totalChunks, type: 'stream_progress', timestamp: new Date().toISOString(), client: identity.client, details: { sessionId: identity.sessionId, transactionId: identity.txId, text: preview } });
+      let projected: string | undefined;
+      try { projected = projectPreview(preview); } catch {}
+      if (projected !== undefined) this.events.broadcast({ id: identity.txId + '-progress-' + totalChunks, type: 'stream_progress', timestamp: new Date().toISOString(), client: identity.client, details: { sessionId: identity.sessionId, transactionId: identity.txId, text: projected } });
       lastProgress = Date.now();
     };
     try {

@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { VaultCatalogProvider } from './catalog-schema.js';
 import { VaultCatalogServer } from './catalog-server.js';
+import { McpSecretInput } from './secret-input-tools.js';
 
 export class McpHttpRequest {
   private server: VaultCatalogServer;
@@ -10,8 +11,8 @@ export class McpHttpRequest {
   private complete: () => void = () => {};
   public readonly done = new Promise<void>(resolve => { this.complete = resolve; });
 
-  constructor(vault: VaultCatalogProvider, version: string, private reply: FastifyReply, private released: () => void) {
-    this.server = new VaultCatalogServer(vault, version);
+  constructor(vault: VaultCatalogProvider, version: string, private reply: FastifyReply, private released: () => void, input?: McpSecretInput) {
+    this.server = new VaultCatalogServer(vault, version, input);
   }
 
   public close = (): Promise<void> => {

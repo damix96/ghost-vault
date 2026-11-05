@@ -4,6 +4,7 @@ import { VaultStore } from './vault/store.js';
 import { GhostProxyServer } from './proxy/server.js';
 
 class VariableRequestTests {
+  private protectedMode = process.argv.includes('--protected');
   private simultaneous = async (stream: boolean, rename = false): Promise<void> => {
     const db = new VaultDatabase(':memory:');
     const vault = new VaultStore(db);
@@ -25,11 +26,12 @@ class VariableRequestTests {
     const server = new GhostProxyServer(vault, { targetApiBase: 'http://127.0.0.1:1' });
     globalThis.fetch = originalFetch;
     try {
-      const first = vault.setManualSecret('CONCURRENT', 'synthetic-first');
+      const first = vault.setManualSecret('CONCURRENT', 'synthetic-first', undefined, this.protectedMode);
       const request = (content: string, sessionId = 'fresh') => server.getApp().inject({ method: 'POST', url: '/v1/chat/completions', headers: { 'x-session-id': sessionId }, payload: { stream, messages: [{ role: 'user', content }] } });
       const pending = request(first.realValue, 'old').then(response => response);
       await firstEntered;
       const current = rename ? vault.renameManualSecret('CONCURRENT', 'RENAMED')! : vault.setManualSecret('CONCURRENT', 'synthetic-second');
+      assert.equal(Boolean(current.isSecret), this.protectedMode);
       const second = await request(current.realValue, 'new');
       assert.equal(second.statusCode, 200);
       assert.ok(second.body.includes(current.realValue));
@@ -47,7 +49,11 @@ class VariableRequestTests {
         assert.equal(evidence.items.length, 1);
         assert.equal(evidence.items[0].key, secret.key);
         assert.equal(evidence.items[0].alias, secret.alias);
-        assert.equal(evidence.items[0].value, secret.realValue);
+        if (this.protectedMode) {
+          assert.ok([first.alias, current.alias].includes(evidence.items[0].value));
+          assert.ok(!JSON.stringify(evidence).includes(first.realValue));
+          assert.ok(!JSON.stringify(evidence).includes(current.realValue));
+        } else assert.equal(evidence.items[0].value, secret.realValue);
       }
       const fresh = await request(first.alias);
       assert.ok(fresh.body.includes(rename ? first.alias : current.realValue));
@@ -62,10 +68,11 @@ class VariableRequestTests {
   };
 
   public run = async (): Promise<void> => {
+    if (this.protectedMode && process.platform !== 'win32') { console.log('SKIP real Windows protected request test'); return; }
     await this.simultaneous(false);
     await this.simultaneous(true);
     await this.simultaneous(true, true);
-    console.log('PASS variable requests: overlapping buffered/streamed updates and streamed rename preserve request snapshots; fresh requests use current values/names');
+    console.log('PASS ' + (this.protectedMode ? 'protected' : 'ordinary') + ' variable requests: overlapping buffered/streamed updates and streamed rename preserve request snapshots; fresh requests use current values/names');
   };
 }
 

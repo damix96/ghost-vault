@@ -9,8 +9,19 @@ export class ArchivedRepresentations {
     db.exec('CREATE TABLE IF NOT EXISTS archived_alias_snapshots (id TEXT PRIMARY KEY, complete INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS archived_alias_forms (id TEXT NOT NULL, form INTEGER NOT NULL, alias TEXT NOT NULL, PRIMARY KEY(id, form));');
   }
 
-  private id = (row: SecretRow): string => createHash('sha256').update(JSON.stringify([row.alias, row.real_value, row.created_at, row.updated_at])).digest('hex');
+  private id = (row: SecretRow): string => row.is_secret && row.write_revision ? row.write_revision : createHash('sha256').update(JSON.stringify([row.alias, row.real_value, row.created_at, row.updated_at])).digest('hex');
   private values = (row: SecretRow): string[] => [...new Set(Object.values(SecretRepresentations.variants(row.real_value)))].filter(Boolean);
+
+  public relocate = (row: SecretRow, identity: string): void => {
+    const previous = this.id(row);
+    this.db.prepare('INSERT INTO archived_alias_snapshots (id, complete) SELECT ?, complete FROM archived_alias_snapshots WHERE id = ?').run(identity, previous);
+    this.db.prepare('INSERT INTO archived_alias_forms (id, form, alias) SELECT ?, form, alias FROM archived_alias_forms WHERE id = ?').run(identity, previous);
+    const retained = this.db.prepare('SELECT 1 FROM secret_versions WHERE is_secret = 0 AND alias IS ? AND real_value IS ? AND created_at IS ? AND updated_at IS ? LIMIT 1').get(row.alias, row.real_value, row.created_at, row.updated_at);
+    if (!retained) {
+      this.db.prepare('DELETE FROM archived_alias_forms WHERE id = ?').run(previous);
+      this.db.prepare('DELETE FROM archived_alias_snapshots WHERE id = ?').run(previous);
+    }
+  };
 
   public capture = (rows: SecretRow[], uncertainAliases: ReadonlySet<string> = new Set()): void => {
     for (const row of rows) {
@@ -34,7 +45,7 @@ export class ArchivedRepresentations {
   public metadata = (row: SecretRow): 'recorded' | 'partial' => {
     const saved = this.db.prepare('SELECT complete FROM archived_alias_snapshots WHERE id = ?').get(this.id(row)) as { complete: number } | undefined;
     const forms = this.db.prepare('SELECT form, alias FROM archived_alias_forms WHERE id = ? ORDER BY form').all(this.id(row)) as { form: number; alias: string }[];
-    const complete = saved?.complete && forms.length === this.values(row).length && forms.every((form, index) => form.form === index && Boolean(form.alias)) && forms[0]?.alias === row.alias;
+    const complete = saved?.complete && (row.is_secret && !row.real_value || forms.length === this.values(row).length) && forms.every((form, index) => form.form === index && Boolean(form.alias)) && forms[0]?.alias === row.alias;
     return complete ? 'recorded' : 'partial';
   };
 }

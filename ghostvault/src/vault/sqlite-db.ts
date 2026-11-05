@@ -7,23 +7,28 @@ import { AliasRegistry } from './alias-registry.js';
 import { ManualBindings } from './manual-bindings.js';
 import { ArchivedRepresentations } from './archived-representations.js';
 import { RuntimeLease } from './runtime-lease.js';
+import { ProtectedStorage } from './protected-storage.js';
+import { SecretProvider } from '../security/secret-provider.js';
+import { SqliteText } from './sqlite-text.js';
 
 import { SecretRow, AutoSecretRow, PatternRow, SessionRow, TransactionRow, RouteRow } from './database-types.js';
 export type { SecretRow, AutoSecretRow, PatternRow, SessionRow, TransactionRow, RouteRow } from './database-types.js';
 
 export class VaultDatabase {
   private db: DatabaseSync;
+  private text: SqliteText;
   public aliases: AliasRegistry;
   public manualBindings: ManualBindings;
   public archivedRepresentations: ArchivedRepresentations;
+  public protectedStorage: ProtectedStorage;
   private lease: RuntimeLease;
   public claimRuntime = (): void => this.lease.acquire();
-  public getVersions = (): SecretRow[] => this.db.prepare('SELECT * FROM secret_versions').all() as unknown as SecretRow[];
+  public getVersions = (): SecretRow[] => this.text.all<SecretRow>('SELECT ' + SqliteText.secretColumns + ' FROM secret_versions');
   public archiveSecret = (key: string): void => { this.db.prepare('INSERT INTO secret_versions SELECT * FROM secrets WHERE key = ?').run(key); };
   public deleteVersions = (key: string): void => { this.db.prepare('DELETE FROM secret_versions WHERE key = ?').run(key); };
   public renameVersions = (key: string, name: string): void => { this.db.prepare('UPDATE secret_versions SET key = ? WHERE key = ?').run(name, key); };
 
-  constructor(customPath?: string) {
+  constructor(customPath?: string, provider?: SecretProvider) {
     const dbPath = customPath || process.env.GHOSTVAULT_DB_PATH || path.join(os.homedir(), '.ghostvault', 'vault.db');
     if (dbPath !== ':memory:') {
       const parentDir = path.dirname(dbPath);
@@ -32,11 +37,13 @@ export class VaultDatabase {
     this.db = new DatabaseSync(dbPath);
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.createTables();
+    this.text = new SqliteText(this.db);
+    this.db.exec('CREATE TABLE IF NOT EXISTS secret_versions AS SELECT * FROM secrets WHERE 0;');
+    this.protectedStorage = new ProtectedStorage(this.db, provider);
     this.aliases = new AliasRegistry(this.db);
     this.manualBindings = new ManualBindings(this.db, this.aliases);
     this.archivedRepresentations = new ArchivedRepresentations(this.db, this.aliases);
     this.lease = new RuntimeLease(dbPath === ':memory:' ? dbPath : fs.realpathSync(dbPath));
-    this.db.exec('CREATE TABLE IF NOT EXISTS secret_versions AS SELECT * FROM secrets WHERE 0;');
     if (!this.db.prepare('PRAGMA table_info(patterns)').all().some(row => row.name === 'label_template')) this.db.exec('ALTER TABLE patterns ADD COLUMN label_template TEXT;');
   }
 
@@ -120,19 +127,20 @@ export class VaultDatabase {
   };
 
   public getSecrets = (): SecretRow[] =>
-    this.db.prepare('SELECT * FROM secrets ORDER BY created_at DESC').all() as unknown as SecretRow[];
+    this.text.all<SecretRow>('SELECT ' + SqliteText.secretColumns + ' FROM secrets ORDER BY created_at DESC');
 
   public upsertSecret = (row: SecretRow): void => {
+    const stored = this.protectedStorage.prepare(row);
     this.db.prepare(
-      'INSERT INTO secrets (key, real_value, alias, mask_in_ai, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET real_value=excluded.real_value, alias=excluded.alias, mask_in_ai=excluded.mask_in_ai, description=excluded.description, updated_at=excluded.updated_at'
-    ).run(row.key, row.real_value, row.alias, row.mask_in_ai, row.description, row.created_at, row.updated_at);
+      'INSERT INTO secrets (key, real_value, alias, mask_in_ai, description, created_at, updated_at, is_secret, protected_value, write_revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET real_value=excluded.real_value, alias=excluded.alias, mask_in_ai=excluded.mask_in_ai, description=excluded.description, updated_at=excluded.updated_at, is_secret=excluded.is_secret, protected_value=excluded.protected_value, write_revision=excluded.write_revision'
+    ).run(stored.key, stored.real_value, stored.alias, stored.mask_in_ai, stored.description, stored.created_at, stored.updated_at, stored.is_secret!, stored.protected_value!, stored.write_revision!);
   };
 
   public deleteSecret = (key: string): boolean =>
     Number(this.db.prepare('DELETE FROM secrets WHERE key = ?').run(key).changes) > 0;
 
   public getAutoSecrets = (): AutoSecretRow[] =>
-    this.db.prepare('SELECT * FROM auto_secrets ORDER BY last_seen_at DESC').all() as unknown as AutoSecretRow[];
+    this.text.all<AutoSecretRow>('SELECT ' + SqliteText.columns(['key', 'real_value', 'alias', 'first_seen_at', 'last_seen_at']) + ', hit_count FROM auto_secrets ORDER BY last_seen_at DESC');
 
   public upsertAutoSecret = (row: AutoSecretRow): void => {
     this.db.prepare(

@@ -9,7 +9,10 @@ export class SecretRepresentations {
   private forms = new Map<SecretEntry, SecretRepresentation[]>();
   private inbound = new Map<string, string>();
 
+  public static isWellFormed = (value: string): boolean => !/[\uD800-\uDFFF]/u.test(value);
+
   public static variants = (value: string) => {
+    if (!SecretRepresentations.isWellFormed(value)) throw Object.assign(new Error('Secret value contains an unpaired UTF-16 surrogate.'), { statusCode: 400, code: 'INVALID_SECRET_INPUT' });
     const escaped = JSON.stringify(value).slice(1, -1);
     const variants: Record<string, string> = {};
     let json = value;

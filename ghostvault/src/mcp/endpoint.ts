@@ -2,10 +2,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { McpAccessPolicy } from './access-policy.js';
 import { VaultCatalogProvider } from './catalog-schema.js';
 import { McpHttpRequest } from './http-request.js';
+import { SecretInputManager } from '../secret-input/manager.js';
 
 export interface VaultMcpEndpointOptions {
   version: string;
   mcpToken: string;
+  input?: SecretInputManager;
 }
 
 export class VaultMcpEndpoint {
@@ -54,7 +56,9 @@ export class VaultMcpEndpoint {
   };
 
   private handle = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const connection = new McpHttpRequest(this.vault, this.options.version, reply, () => this.active.delete(connection));
+    const manager = this.options.input ?? (this.app.hasDecorator('secretInput') ? this.app.getDecorator<SecretInputManager>('secretInput') : undefined);
+    const input = manager ? { manager, origin: 'http://' + request.headers.host } : undefined;
+    const connection = new McpHttpRequest(this.vault, this.options.version, reply, () => this.active.delete(connection), input);
     this.active.add(connection);
     await connection.handle(request);
   };
