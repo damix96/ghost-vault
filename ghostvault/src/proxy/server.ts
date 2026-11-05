@@ -22,6 +22,12 @@ import { UpstreamClient } from './upstream-client.js';
 import { AdminAccess } from './admin-access.js';
 import { RuntimeSessions } from './runtime-sessions.js';
 import { RuntimeActivity } from '../runtime/activity.js';
+import { SecretInputPages } from '../secret-input/pages.js';
+import { SecretInputEndpoint } from '../secret-input/endpoint.js';
+import { SecretInputManager } from '../secret-input/manager.js';
+import { VaultSecretInputStorage } from '../secret-input/storage.js';
+import { SecretInputBrowser } from '../secret-input/browser-launcher.js';
+import { ProtectedEvents } from '../secret-input/protected-events.js';
 
 const publicPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../public');
 
@@ -39,18 +45,18 @@ export class GhostProxyServer {
   private vault: VaultStore;
   private patternEngine: PatternEngine;
   private hookManager: HookManager;
-  private eventBroadcaster = new EventBroadcaster();
+  private eventBroadcaster = new ProtectedEvents(event => this.vault.redactProtected(event), text => this.vault.redactProtectedPreview(text));
   private hookSandbox: HookSandbox;
   private dashboardApi: DashboardApi;
   private sessionResolver = new SessionResolver();
   private payloadCodec = new PayloadCodec();
   private upstreamClient = new UpstreamClient();
-  private runtime = new RuntimeSessions(undefined, (sessionId, reason) => this.eventBroadcaster.broadcast({ id: crypto.randomUUID(), type: 'session_removed', timestamp: new Date().toISOString(), client: '', details: { sessionId, reason } }));
+  private runtime = new RuntimeSessions(undefined, (sessionId, reason) => this.eventBroadcaster.broadcast({ id: crypto.randomUUID(), type: 'session_removed', timestamp: new Date().toISOString(), client: '', details: { sessionId, reason } }), undefined, record => this.vault.redactProtected(record));
   private config: GhostVaultConfig;
   private startTime = Date.now();
   private activity = new RuntimeActivity();
 
-  constructor(vault?: VaultStore, config?: Partial<GhostVaultConfig>, hookManager?: HookManager) {
+  constructor(vault?: VaultStore, config?: Partial<GhostVaultConfig>, hookManager?: HookManager, inputBrowser?: SecretInputBrowser) {
     this.vault = vault ?? new VaultStore();
     this.patternEngine = new PatternEngine(this.vault.getDatabase());
     this.hookManager = hookManager ?? new HookManager();
@@ -58,10 +64,12 @@ export class GhostProxyServer {
     this.config = { port: 8765, host: '127.0.0.1', targetApiBase: 'https://api.anthropic.com', confirmationMode: 'auto', storagePath: '', maxBufferWindowChars: 64, ...config };
     if (this.config.hooksDir) this.hookManager.loadHooksFromDir(this.config.hooksDir);
     this.app = Fastify({ logger: false });
+    new SecretInputEndpoint(this.app, new SecretInputManager(new VaultSecretInputStorage(this.vault), inputBrowser)).register();
     const adminAccess = new AdminAccess(this.config.host);
     adminAccess.install(this.app);
     this.app.register(cors, { delegator: adminAccess.cors });
     this.app.register(fastifyStatic, { root: publicPath, prefix: '/', wildcard: false, index: false });
+    new SecretInputPages(this.app).register();
     this.dashboardApi = new DashboardApi(
       this.app, this.vault, this.patternEngine, this.hookManager, this.eventBroadcaster, this.hookSandbox,
       () => this.startTime, this.getLastCall, this.getLastTransactionContext,
@@ -78,6 +86,7 @@ export class GhostProxyServer {
 
   public getApp = (): FastifyInstance => this.app;
   public getVault = (): VaultStore => this.vault;
+  public getSecretInput = (): SecretInputManager => this.app.getDecorator<SecretInputManager>('secretInput');
   public getPatternEngine = (): PatternEngine => this.patternEngine;
   public getHookManager = (): HookManager => this.hookManager;
   public getEventBroadcaster = (): EventBroadcaster => this.eventBroadcaster;
@@ -87,16 +96,17 @@ export class GhostProxyServer {
     const secret = record?.interceptedSecrets.at(-1);
     return record && secret ? { direction: secret.direction, client: record.request.client, timestamp: record.timestamp, rawUrl: secret.realValue, alias: secret.alias, key: secret.key } : null;
   };
-  public getLastTransactionContext = (): TransactionRecord | null => this.runtime.records()[0] || null;
-  public getTransactionHistory = (): TransactionRecord[] => this.runtime.records();
-  public getTransactionById = (id: string): TransactionRecord | undefined => this.runtime.find(id);
+  public getLastTransactionContext = (): TransactionRecord | null => this.vault.redactProtected(this.runtime.records()[0] || null);
+  public getTransactionHistory = (): TransactionRecord[] => this.vault.redactProtected(this.runtime.records());
+  public getTransactionById = (id: string): TransactionRecord | undefined => this.vault.redactProtected(this.runtime.find(id));
   public getUpstreamSettings = () => new RouteRegistry(this.vault.getDatabase()).getSettings();
   public setUpstreamSettings = (settings: Record<string, string | undefined>) => new RouteRegistry(this.vault.getDatabase()).updateSettings(settings);
   public listen = async (): Promise<string> =>
     this.app.listen({ port: this.config.port, host: this.config.host });
   public drain = async (timeoutMs = 5000): Promise<void> => this.activity.drain(timeoutMs);
   public abortRequests = (): void => this.activity.abort();
-  public close = async (): Promise<void> => { this.activity.stopAdmission(); this.eventBroadcaster.close(); await this.activity.drain(); await this.app.close(); this.runtime.clear(); };
+  public closeSecretInput = (): Promise<void> => this.app.hasDecorator('secretInputEndpoint') ? this.app.getDecorator<SecretInputEndpoint>('secretInputEndpoint').close() : Promise.resolve();
+  public close = async (): Promise<void> => { this.activity.stopAdmission(); this.eventBroadcaster.close(); await Promise.all([this.closeSecretInput(), this.activity.drain()]); await this.app.close(); this.runtime.clear(); };
 
   public clearTransactionHistory = (sessionId?: string): void => {
     this.runtime.clear(sessionId);
@@ -104,7 +114,7 @@ export class GhostProxyServer {
   };
 
   public recordTransaction = (record: TransactionRecord): void => {
-    this.runtime.record(record);
+    this.runtime.record(this.vault.redactProtected(record));
     this.completed(record, true);
   };
 
@@ -165,11 +175,11 @@ export class GhostProxyServer {
     const sessionId = this.sessionResolver.resolveSessionId(req, clientName);
     const incomingUrl = req.url;
     const started = new Date().toISOString();
-    const call = this.runtime.begin({ id: txId, sessionId, timestamp: started, request: { method: req.method, url: incomingUrl, headers: req.headers as Record<string, string>, body: req.body, client: clientName }, interceptedSecrets: [] });
+    const call = this.runtime.begin(this.vault.redactProtected({ id: txId, sessionId, timestamp: started, request: { method: req.method, url: incomingUrl, headers: req.headers as Record<string, string>, body: req.body, client: clientName }, interceptedSecrets: [] }));
     const retain = call.current;
     let lastRecord: TransactionRecord | undefined;
     const record = (transaction: TransactionRecord): void => {
-      lastRecord = { ...transaction, timestamp: started, request: { ...transaction.request, url: incomingUrl } };
+      lastRecord = this.vault.redactProtected({ ...transaction, timestamp: started, request: { ...transaction.request, url: incomingUrl } });
       call.update(lastRecord);
     };
     this.eventBroadcaster.broadcast({ id: txId + '-start', type: 'request_started', timestamp: new Date().toISOString(), client: clientName, details: { sessionId, transactionId: txId, endpoint: req.url } });

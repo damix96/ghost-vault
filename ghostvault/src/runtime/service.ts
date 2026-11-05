@@ -80,14 +80,15 @@ export class GhostVaultRuntime {
     await this.starting?.catch(() => {});
     this.proxy?.getEventBroadcaster().close();
     const endpoint = this.endpoint?.close();
+    const input = this.proxy?.closeSecretInput();
     const grace = Math.max(0, graceDeadline - Date.now());
-    try { await RuntimeDeadline.wait(Promise.all([endpoint, this.listener.drain(grace), this.proxy?.drain(grace)]), grace); }
+    try { await RuntimeDeadline.wait(Promise.all([endpoint, input, this.listener.drain(grace), this.proxy?.drain(grace)]), grace); }
     catch (error) {
       if (!(error instanceof RuntimeDrainTimeout)) throw error;
       this.proxy?.abortRequests();
       this.listener.abortRequests();
       const settlement = Math.max(0, settlementDeadline - Date.now());
-      await RuntimeDeadline.wait(Promise.all([endpoint, this.listener.drain(settlement), this.proxy?.drain(settlement)]), settlement);
+      await RuntimeDeadline.wait(Promise.all([endpoint, input, this.listener.drain(settlement), this.proxy?.drain(settlement)]), settlement);
     }
     await RuntimeDeadline.wait(this.proxy?.close() ?? Promise.resolve(), Math.max(0, settlementDeadline - Date.now()));
     this.database?.close();

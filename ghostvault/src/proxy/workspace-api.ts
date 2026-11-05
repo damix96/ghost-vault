@@ -9,11 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { DefaultRoutes } from '../vault/default-routes.js';
 import { RuntimeSessions } from './runtime-sessions.js';
 import { GhostVaultConfig } from '../types/index.js';
+import { SecretProjection } from '../vault/secret-projection.js';
 
 export class WorkspaceApi {
   constructor(private app: FastifyInstance, private db: VaultDatabase, private hooks: HookManager, private proxyConfig: Partial<GhostVaultConfig>, private vault?: VaultStore, private runtime = new RuntimeSessions()) {}
 
-  private archivedVersion = (row: SecretRow) => ({ ...row, representations: this.db.archivedRepresentations.get(row), representationMetadata: this.db.archivedRepresentations.metadata(row) });
+  private archivedVersion = (row: SecretRow) => ({ ...SecretProjection.row(row), representations: row.is_secret ? undefined : this.db.archivedRepresentations.get(row), representationMetadata: this.db.archivedRepresentations.metadata(row) });
 
   private state = () => {
     const routes = this.db.getAllRoutes();
@@ -47,7 +48,7 @@ export class WorkspaceApi {
       const groups: Record<string, unknown[]> = {
         connections: this.db.getAllRoutes().map(route => ({ ...route, suffix: this.db.getSetting('route_suffix_' + route.id, '') })),
         patterns: this.db.getPatterns(),
-        secrets: [...manual.map(entry => ({ ...entry, origin: 'manual', representations: this.vault?.getSecretRepresentations(entry), versions: versions.filter(version => version.key === entry.key).map(this.archivedVersion) })), ...(this.vault ? this.vault.getAutoSecrets().map(entry => ({ key: entry.key, real_value: entry.realValue, alias: entry.alias, hit_count: entry.hitCount, first_seen_at: entry.createdAt, last_seen_at: entry.updatedAt, origin: 'auto', storage: entry.storage, representations: entry.representations })) : this.db.getAutoSecrets().map(entry => ({ ...entry, origin: 'auto', storage: 'legacy' })))],
+        secrets: [...manual.map(entry => ({ ...SecretProjection.row(entry), origin: 'manual', representations: entry.is_secret ? undefined : this.vault?.getSecretRepresentations(entry), versions: versions.filter(version => version.key === entry.key).map(this.archivedVersion) })), ...(this.vault ? this.vault.getAutoSecrets().map(entry => ({ key: entry.key, real_value: entry.realValue, alias: entry.alias, hit_count: entry.hitCount, first_seen_at: entry.createdAt, last_seen_at: entry.updatedAt, origin: 'auto', storage: entry.storage, representations: entry.representations })) : this.db.getAutoSecrets().map(entry => ({ ...entry, origin: 'auto', storage: 'legacy' })))],
         hooks: this.hooks.exportConfiguration(),
         proxy: [{ id: 'proxy', ...this.proxyConfig }],
         settings: Object.entries(this.db.getAllSettings()).map(([key, value]) => ({ key, value })),

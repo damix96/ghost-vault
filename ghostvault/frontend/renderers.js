@@ -15,6 +15,13 @@ export class TableRenderer {
     this.rows('manualTableBody', SecretTableView.rows(secrets || [], query), this.manual);
   };
 
+  replaceManualRows = (secrets, query) => {
+    const root = document.getElementById('manualTableBody');
+    HintLifecycle.hide(root);
+    root.dataset.signature = '';
+    this.manual.render(root, SecretTableView.rows(secrets || [], query));
+  };
+
   renderAutoRows = (secrets, query) => {
     this.rows('autoTableBody', SecretTableView.rows(secrets || [], query, true), this.automatic);
   };

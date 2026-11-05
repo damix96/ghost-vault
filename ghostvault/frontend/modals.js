@@ -4,11 +4,14 @@ import { HintLifecycle } from './hint-lifecycle.js';
 import { FormFeedback } from './form-feedback.js';
 import { EditorValidation } from './editor-validation.js';
 import { RulePreview } from './rule-preview.js';
+import { SecretPrivacy } from './secret-privacy.js';
+import { SecretCleanup } from './secret-cleanup.js';
 
 export class ModalManager {
   editingKey = null;
   pending = new Set();
   drafts = new Map();
+  sensitive = false;
 
   constructor(app, api) {
     this.app = app;
@@ -36,11 +39,15 @@ export class ModalManager {
       const page = document.getElementById('viewSecrets');
       const trigger = this.editingKey ? [...page.querySelectorAll('[data-action="secret-edit"]')].find(action => JSON.parse(action.dataset.args)[0] === this.editingKey) : document.getElementById('openAddModalBtn');
       event.currentTarget.setReturnFocus(trigger, page.querySelector('gv-page'));
-      if (!this.saved) this.drafts.set(this.editingKey || '', { key: Ui.read('modalKeyInput'), value: Ui.read('modalValInput'), description: Ui.read('modalDescInput') });
+      if (this.sensitive) {
+        this.drafts.delete(this.editingKey || '');
+        SecretPrivacy.clearField(document.getElementById('modalValInput'));
+      } else if (!this.saved) this.drafts.set(this.editingKey || '', { key: Ui.read('modalKeyInput'), value: Ui.read('modalValInput'), description: Ui.read('modalDescInput') });
       this.saved = false;
       this.editingKey = null;
     });
     document.getElementById('patternModal').addEventListener('gv-close', event => { this.rulePreview.cancel(); HintLifecycle.hide(event.currentTarget); });
+    window.addEventListener('pagehide', () => { if (this.sensitive) SecretPrivacy.clearField(document.getElementById('modalValInput')); });
   };
 
   openSecretModal = async (secretKey = null) => {
@@ -49,15 +56,19 @@ export class ModalManager {
     HintLifecycle.hide();
     this.editingKey = secretKey;
     const secret = [...this.app.manualSecrets, ...this.app.autoSecrets].find(item => item.key === secretKey);
+    this.sensitive = Boolean(secret?.isSecret);
+    if (this.sensitive) SecretPrivacy.forget(this.app, secretKey);
     const key = document.getElementById('modalKeyInput');
-    const draft = this.drafts.get(secretKey || '');
+    const draft = this.sensitive ? null : this.drafts.get(secretKey || '');
     key.value = draft?.key ?? secret?.key ?? '';
     key.readonly = Boolean(secret);
     key.label = secret ? 'Имя записи' : 'Имя подстановки';
     key.description = secret ? 'Имя и подстановка сохранятся. Для смены имени используйте «Переименовать» в списке.' : EditorViews.keyDescription;
     const restored = draft && (draft.key !== (secret?.key || '') || draft.value !== (secret?.realValue || '') || draft.description !== (secret?.description || ''));
-    dialog.heading = (secret ? 'Изменить секрет' : 'Добавить секрет') + (restored ? ' · черновик' : '');
-    document.getElementById('modalValInput').value = draft?.value ?? secret?.realValue ?? '';
+    dialog.heading = (this.sensitive ? 'Заменить секретное значение' : secret ? 'Изменить переменную' : 'Добавить переменную') + (restored ? ' · черновик' : '');
+    document.getElementById('modalValInput').value = this.sensitive ? '' : draft?.value ?? secret?.realValue ?? '';
+    document.getElementById('modalValInput').label = this.sensitive ? 'Новое секретное значение' : 'Значение';
+    document.getElementById('secretStorageNote').textContent = this.sensitive ? 'Защищённое хранение. Старое значение не загружается. Ввод очищается после сохранения или отмены.' : 'Хранение без шифрования. Значение сохраняется на этом компьютере.';
     document.getElementById('modalDescInput').value = draft?.description ?? secret?.description ?? '';
     document.getElementById('modalPreviewToken').textContent = secret?.alias || (key.value ? '$${<' + key.value + '>}' : 'Введите имя');
     document.getElementById('modalPreviewLabel').textContent = secret ? 'Текущая подстановка' : 'В запросе';
@@ -96,7 +107,12 @@ export class ModalManager {
     button.busy = true;
     Ui.error(kind + 'FormError', '');
     try {
-      await operation();
+      const result = await operation();
+      SecretCleanup.notice(this.app, result);
+      if (kind === 'secret' && this.sensitive) {
+        this.drafts.delete(this.editingKey || '');
+        SecretPrivacy.clearField(document.getElementById('modalValInput'));
+      }
       await afterSave();
       if (kind === 'secret') { this.saved = true; this.drafts.delete(this.editingKey || ''); }
       this.pending.delete(kind);

@@ -1,6 +1,7 @@
 import { Ui } from './ui-components.js';
 import { FormFeedback } from './form-feedback.js';
 import { HintLifecycle } from './hint-lifecycle.js';
+import { SecretCleanup } from './secret-cleanup.js';
 
 export class SecretRename {
   drafts = new Map();
@@ -96,6 +97,7 @@ export class SecretRename {
       }
       if (!this.committed) {
         const result = await this.app.api.renameSecret(this.source, name);
+        SecretCleanup.notice(this.app, result);
         this.apply(result.secret);
       }
       await this.app.fetchData(true);

@@ -8,6 +8,8 @@ export const VAULT_MCP_INSTRUCTIONS = [
   'A catalog is a snapshot: variables may be added, removed, renamed or changed outside this session. Refresh the catalog if a suitable name is missing, a name is unknown or no longer recognized, or the snapshot may be stale.',
   'Changing a value preserves its name and token; subsequent proxy requests use the current value, not a historical value. Renaming may invalidate the old name.',
   'You do not need to refresh before every reuse of a known variable merely because its value could have changed.',
+  'When the secret input tools are available, use ghostvault_request_secret_input with operation new or update and the required names to ask the human for local browser input. Never include secret values in MCP arguments, chat or URLs.',
+  'The browser submits values directly to the local Vault; MCP receives request state and metadata only. A launch attempt is not proof the human saw the page. Check ghostvault_secret_input_status after human action, or cancel a pending request with ghostvault_cancel_secret_input; do not poll or wait indefinitely.',
 ].join(' ');
 
 export const VAULT_CATALOG_DESCRIPTION = 'Discover available Vault variables without exposing original or encoded values. ' + VAULT_MCP_INSTRUCTIONS;

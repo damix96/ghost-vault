@@ -33,7 +33,7 @@ export class CompositeAliasLifecycleTests {
       const formsDistinct = new Set(initialAliases).size === forms.length;
       schemaDb = new DatabaseSync(filePath);
       const columns = schemaDb.prepare('PRAGMA table_info(secrets)').all().map((row: any) => row.name);
-      const dbSchemaStable = columns.join(',') === 'key,real_value,alias,mask_in_ai,description,created_at,updated_at' && loadedStore.getDatabase().getSecrets().some(row => row.key === 'RELOAD_FORM' && row.alias === '$${<RELOAD_FORM>}');
+      const dbSchemaStable = columns.join(',') === 'key,real_value,alias,mask_in_ai,description,created_at,updated_at,is_secret,protected_value,write_revision' && loadedStore.getDatabase().getSecrets().some(row => row.key === 'RELOAD_FORM' && row.alias === '$${<RELOAD_FORM>}');
       schemaDb.close();
       schemaDb = undefined;
       loadedDb.close();

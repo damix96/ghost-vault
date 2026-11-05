@@ -46,9 +46,10 @@ export class DashboardApi {
 
   private runtimeRecord = (record: TransactionRecord): TransactionRecord => ({ ...record, response: record.response ? { ...record.response, body: ResponseNormalizer.normalize(record.response.body) } : undefined });
 
-  private autoSecrets = () => this.vault.getAutoSecrets();
+  private autoSecrets = () => this.vault.getAutoSecrets().map(this.vault.publicEntry);
 
   public registerRoutes = (): void => {
+    this.app.addHook('preSerialization', async (request, _, payload) => request.url.split('?')[0].startsWith('/api/') ? this.vault.redactProtected(payload) : payload);
     new WorkspaceApi(this.app, this.vault.getDatabase(), this.hookManager, this.proxyConfig, this.vault, this.runtime).register();
     new VariableApi(this.app, this.vault).register();
     this.app.get('/dashboard', async (_, reply: FastifyReply) => reply.sendFile('index.html'));
@@ -60,9 +61,9 @@ export class DashboardApi {
     }));
 
     this.app.get('/api/vault', async () => ({
-      manual: this.vault.getManualSecrets(),
+      manual: this.vault.getManualSecrets().map(this.vault.publicEntry),
       auto: this.autoSecrets(),
-      manualSecrets: this.vault.getManualSecrets(),
+      manualSecrets: this.vault.getManualSecrets().map(this.vault.publicEntry),
       autoSecrets: this.autoSecrets(),
       lastCall: this.getLastCall(),
       retention: this.vault.getRetention(),
@@ -97,7 +98,7 @@ export class DashboardApi {
 
     this.app.get('/api/sessions', async () => this.runtime.list());
     this.app.get('/api/sessions/:id', async (req: FastifyRequest<{ Params: { id: string } }>) => this.runtime.bySession(req.params.id).map(this.runtimeRecord));
-    this.app.get('/api/sessions/:id/full', async (req: FastifyRequest<{ Params: { id: string } }>) => SessionDialogue.latest(this.runtime.bySession(req.params.id)[0]));
+    this.app.get('/api/sessions/:id/full', async (req: FastifyRequest<{ Params: { id: string } }>) => this.vault.redactProtected({ body: SessionDialogue.latest(this.runtime.bySession(req.params.id)[0]) }).body);
 
     this.app.delete('/api/sessions/:id', async (req: FastifyRequest<{ Params: { id: string } }>) => {
       this.clearHistory(req.params.id);

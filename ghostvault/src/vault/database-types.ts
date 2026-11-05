@@ -6,6 +6,9 @@ export interface SecretRow {
   description: string;
   created_at: string;
   updated_at: string;
+  is_secret?: number;
+  protected_value?: string;
+  write_revision?: string;
 }
 
 export interface AutoSecretRow {

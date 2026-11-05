@@ -3,11 +3,12 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { catalogInputShape, catalogSchema, VaultCatalogProvider } from './catalog-schema.js';
 import { VAULT_CATALOG_DESCRIPTION, VAULT_MCP_INSTRUCTIONS } from './instructions.js';
+import { McpSecretInput, SecretInputTools } from './secret-input-tools.js';
 
 export class VaultCatalogServer {
   public readonly mcp: McpServer;
 
-  constructor(private vault: VaultCatalogProvider, version: string) {
+  constructor(private vault: VaultCatalogProvider, version: string, input?: McpSecretInput) {
     this.mcp = new McpServer({ name: 'ghostvault', version }, { instructions: VAULT_MCP_INSTRUCTIONS });
     this.mcp.registerTool('ghostvault_list_variables', {
       title: 'List GhostVault variables',
@@ -16,6 +17,7 @@ export class VaultCatalogServer {
       outputSchema: catalogSchema.shape,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     }, this.listVariables);
+    if (input) new SecretInputTools(this.mcp, input).register();
   }
 
   public connect = async (transport: Transport): Promise<void> => {

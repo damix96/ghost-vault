@@ -103,6 +103,15 @@ export class ApiClient {
       body: JSON.stringify({ name }),
     });
 
+  protectSecret = async key =>
+    this.request(`/api/vault/secret/${encodeURIComponent(key)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isSecret: true }),
+    });
+
+  saveProtectedSecret = async payload =>
+    this.saveSecret({ ...payload, isSecret: true });
+
   deleteSecret = async key =>
     this.request(`/api/vault/secret/${encodeURIComponent(key)}`, {
       method: 'DELETE',

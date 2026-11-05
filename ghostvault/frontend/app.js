@@ -16,6 +16,10 @@ import { RelativeTime } from './relative-time.js';
 import { SecretNavigation } from './secret-navigation.js';
 import { ViewPreferences } from './view-preferences.js';
 import { SecretRename } from './secret-rename.js';
+import { SecretProtection } from './secret-protection.js';
+import { SecretPrivacy } from './secret-privacy.js';
+import { ProtectedEditor } from './protected-editor.js';
+import { SecretCleanup } from './secret-cleanup.js';
 
 export class DashboardApp {
   api = new ApiClient();
@@ -24,6 +28,8 @@ export class DashboardApp {
   feed = new LiveFeed(this.api);
   modals = new ModalManager(this, this.api);
   secretRename = new SecretRename(this);
+  secretProtection = new SecretProtection(this);
+  protectedEditor = new ProtectedEditor(this, payload => this.api.saveProtectedSecret(payload));
   overview = new Overview(this, this.api);
   connections = new Connections(this, this.api);
   activeMainTab = 'overview';
@@ -39,6 +45,7 @@ export class DashboardApp {
   rulesQuery = '';
   vaultSignature = '';
   vaultRequest = 0;
+  cleanupPending = false;
   ruleDetails = new DisclosureState();
   clipboard = new ClipboardTask(value => navigator.clipboard.writeText(value));
 
@@ -52,6 +59,9 @@ export class DashboardApp {
     this.bindEvents();
     this.modals.init();
     this.secretRename.init();
+    this.secretProtection.init();
+    this.protectedEditor.init();
+    document.getElementById('openProtectedCreateBtn').addEventListener('gv-activate', () => this.protectedEditor.open());
     this.overview.init();
     this.preferences.init();
     await this.connections.init();
@@ -126,6 +136,8 @@ export class DashboardApp {
       if (request !== this.vaultRequest) return;
       this.manualSecrets = data.manualSecrets || data.manual || [];
       this.autoSecrets = data.autoSecrets || data.auto || [];
+      SecretPrivacy.observe(this);
+      SecretCleanup.observe(this, data);
       document.getElementById('autoRetentionNotice').textContent = data.retention?.notice || 'Новые найденные значения хранятся до перезапуска. Перенесите нужные в ручные.';
       this.renderer.renderStatus(true, this.manualSecrets.length + this.autoSecrets.length);
       const signature = JSON.stringify([this.manualSecrets, this.autoSecrets]);
@@ -191,6 +203,7 @@ export class DashboardApp {
     document.getElementById('manualVaultTable').hidden = this.secretsSubTab !== 'manual';
     document.getElementById('autoVaultTable').hidden = this.secretsSubTab !== 'auto';
     document.getElementById('openAddModalBtn').hidden = this.secretsSubTab !== 'manual';
+    document.getElementById('openProtectedCreateBtn').hidden = this.secretsSubTab !== 'manual';
     document.getElementById('secretRulesLink').hidden = this.secretsSubTab !== 'auto';
   };
 
@@ -228,11 +241,11 @@ export class DashboardApp {
     this.toastTimer = setTimeout(() => { toast.hidden = true; }, 3500);
   };
 
-  openModal = key => this.modals.openSecretModal(key);
+  openModal = key => this.manualSecrets.find(secret => secret.key === key)?.isSecret ? this.protectedEditor.open(key) : this.modals.openSecretModal(key);
 
   handleDeleteSecret = async key => {
     if (!await this.utilities.confirm('Удалить секрет «' + key + '»?', 'Подстановка перестанет работать в новых запросах. Уже начатые запросы завершатся с прежним значением. Включённое правило может найти значение снова.')) return;
-    await this.api.deleteSecret(key);
+    SecretCleanup.notice(this, await this.api.deleteSecret(key));
     await this.fetchData();
     this.showToast('Секрет удалён. При активном правиле он может обнаружиться заново.');
   };

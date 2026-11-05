@@ -1,3 +1,6 @@
+import { SecretPrivacy } from './secret-privacy.js';
+import { SecretCleanup } from './secret-cleanup.js';
+
 export class SecretNavigation {
   generation = 0;
   timer = null;
@@ -47,6 +50,8 @@ export class SecretNavigation {
       if (!category) { this.app.showToast('Этот секрет больше не сохранён.'); return; }
       this.app.manualSecrets = manual;
       this.app.autoSecrets = automatic;
+      SecretPrivacy.observe(this.app);
+      SecretCleanup.observe(this.app, vault);
       this.app.searchQuery = '';
       document.getElementById('searchInput').value = '';
       document.activeElement?.blur();

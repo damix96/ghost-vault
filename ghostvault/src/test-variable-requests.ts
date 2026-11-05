@@ -4,6 +4,7 @@ import { VaultStore } from './vault/store.js';
 import { GhostProxyServer } from './proxy/server.js';
 
 class VariableRequestTests {
+  private protectedMode = process.argv.includes('--protected');
   private simultaneous = async (stream: boolean, rename = false): Promise<void> => {
     const db = new VaultDatabase(':memory:');
     const vault = new VaultStore(db);
@@ -25,11 +26,12 @@ class VariableRequestTests {
     const server = new GhostProxyServer(vault, { targetApiBase: 'http://127.0.0.1:1' });
     globalThis.fetch = originalFetch;
     try {
-      const first = vault.setManualSecret('CONCURRENT', 'synthetic-first');
+      const first = vault.setManualSecret('CONCURRENT', 'synthetic-first', undefined, this.protectedMode);
       const request = (content: string) => server.getApp().inject({ method: 'POST', url: '/v1/chat/completions', payload: { stream, messages: [{ role: 'user', content }] } });
       const pending = request(first.realValue).then(response => response);
       await firstEntered;
       const current = rename ? vault.renameManualSecret('CONCURRENT', 'RENAMED')! : vault.setManualSecret('CONCURRENT', 'synthetic-second');
+      assert.equal(Boolean(current.isSecret), this.protectedMode);
       const second = await request(current.realValue);
       assert.equal(second.statusCode, 200);
       assert.ok(second.body.includes(current.realValue));
@@ -53,10 +55,11 @@ class VariableRequestTests {
   };
 
   public run = async (): Promise<void> => {
+    if (this.protectedMode && process.platform !== 'win32') { console.log('SKIP real Windows protected request test'); return; }
     await this.simultaneous(false);
     await this.simultaneous(true);
     await this.simultaneous(true, true);
-    console.log('PASS variable requests: overlapping buffered/streamed updates and streamed rename preserve request snapshots; fresh requests use current values/names');
+    console.log('PASS ' + (this.protectedMode ? 'protected' : 'ordinary') + ' variable requests: overlapping buffered/streamed updates and streamed rename preserve request snapshots; fresh requests use current values/names');
   };
 }
 

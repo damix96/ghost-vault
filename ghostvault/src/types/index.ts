@@ -3,6 +3,7 @@ export interface SecretEntry {
   realValue: string;
   alias: string;
   maskInAi: boolean;
+  isSecret?: boolean;
   description?: string;
   variants: {
     [format: string]: string;
@@ -21,6 +22,13 @@ export interface SecretEntry {
   createdAt: string;
   updatedAt: string;
 }
+
+export type SecretPublicEntry = Omit<SecretEntry, 'realValue' | 'variants' | 'representations' | 'isSecret'> & {
+  isSecret: boolean;
+  realValue?: string;
+  variants?: SecretEntry['variants'];
+  representations?: SecretEntry['representations'];
+};
 
 export type ConfirmationMode = 
   | 'auto' 

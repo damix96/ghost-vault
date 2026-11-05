@@ -22,6 +22,7 @@ class VariableExportTests {
   };
   private entry = (key: string, value: string, alias = '$${<' + key + '>}'): SecretEntry => ({ key, realValue: value, alias, description: 'Historical endpoint', maskInAi: true, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z', variants: VaultStore.computeVariants(value) });
   private row = (entry: SecretEntry): SecretRow => ({ key: entry.key, real_value: entry.realValue, alias: entry.alias, description: entry.description || '', mask_in_ai: Number(entry.maskInAi), created_at: entry.createdAt, updated_at: entry.updatedAt });
+  private exportedRow = ({ is_secret, protected_value, write_revision, ...row }: SecretRow) => row;
   private legacySet = (db: VaultDatabase, entry: SecretEntry, archive = false) => db.aliases.allocate(entry, true, () => { if (archive) db.archiveSecret(entry.key); db.upsertSecret(this.row(entry)); });
 
   private scopes = async (app: FastifyInstance, orphans: unknown[], activeId?: string): Promise<void> => {
@@ -118,7 +119,7 @@ class VariableExportTests {
       assert.deepEqual(vault.getArchivedRepresentations(db.getVersions()[0]), forms);
       const all = (await app.inject({ url: '/api/export' })).json();
       assert.ok(!all.data.secrets.some((secret: { key: string }) => secret.key === 'RENAMED_ARCHIVE'));
-      const orphan = { ...db.getVersions()[0], representations: forms, representationMetadata: 'recorded' };
+      const orphan = { ...this.exportedRow(db.getVersions()[0]), representations: forms, representationMetadata: 'recorded' };
       const orphanState = state();
       const orphanInbound = vault.getInboundReplacements();
       await this.scopes(app, [orphan], 'ARCHIVE');
@@ -140,7 +141,7 @@ class VariableExportTests {
     assert.deepEqual(restarted.getArchivedRepresentations(reopened.getVersions()[0]), forms);
     const restartedApp = Fastify();
     new WorkspaceApi(restartedApp, reopened, new HookManager(), {}, restarted).register();
-    try { await this.scopes(restartedApp, [{ ...reopened.getVersions()[0], representations: forms, representationMetadata: 'recorded' }], 'ARCHIVE'); }
+    try { await this.scopes(restartedApp, [{ ...this.exportedRow(reopened.getVersions()[0]), representations: forms, representationMetadata: 'recorded' }], 'ARCHIVE'); }
     finally { await restartedApp.close(); reopened.close(); }
   };
 
@@ -179,7 +180,7 @@ class VariableExportTests {
     const vault = new VaultStore(db);
     const app = Fastify();
     new WorkspaceApi(app, db, new HookManager(), {}, vault).register();
-    const orphan = { ...db.getVersions()[0], representations: forms, representationMetadata: 'recorded' };
+    const orphan = { ...this.exportedRow(db.getVersions()[0]), representations: forms, representationMetadata: 'recorded' };
     try {
       assert.deepEqual(vault.listVariables().variables, []);
       await this.scopes(app, [orphan], old.key);
