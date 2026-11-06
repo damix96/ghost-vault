@@ -9,7 +9,7 @@ export class ArchivedRepresentations {
     db.exec('CREATE TABLE IF NOT EXISTS archived_alias_snapshots (id TEXT PRIMARY KEY, complete INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS archived_alias_forms (id TEXT NOT NULL, form INTEGER NOT NULL, alias TEXT NOT NULL, PRIMARY KEY(id, form));');
   }
 
-  private id = (row: SecretRow): string => row.is_secret && row.write_revision ? row.write_revision : createHash('sha256').update(JSON.stringify([row.alias, row.real_value, row.created_at, row.updated_at])).digest('hex');
+  private id = (row: SecretRow): string => row.write_revision && (row.is_secret || this.db.prepare('SELECT 1 FROM archived_alias_snapshots WHERE id = ?').get(row.write_revision)) ? row.write_revision : createHash('sha256').update(JSON.stringify([row.alias, row.real_value, row.created_at, row.updated_at])).digest('hex');
   private values = (row: SecretRow): string[] => [...new Set(Object.values(SecretRepresentations.variants(row.real_value)))].filter(Boolean);
 
   public relocate = (row: SecretRow, identity: string): void => {

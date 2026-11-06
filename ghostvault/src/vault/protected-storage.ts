@@ -4,7 +4,7 @@ import { SecretProtection } from '../security/secret-protection.js';
 import { SecretProvider, SecretStorageNotice } from '../security/secret-provider.js';
 import { SecretRow } from './database-types.js';
 import { ProtectedDiagnostics } from './protected-diagnostics.js';
-import { SecretRepresentation } from './secret-representations.js';
+import { SecretRepresentation, SecretRepresentations } from './secret-representations.js';
 import { SqliteText } from './sqlite-text.js';
 
 export class ProtectedStorage {
@@ -32,7 +32,7 @@ export class ProtectedStorage {
       if (!columns.has(name)) this.db.exec('ALTER TABLE ' + table + ' ADD COLUMN ' + name + ' ' + type);
     }
     for (const action of ['INSERT', 'UPDATE']) this.db.exec(`CREATE TRIGGER IF NOT EXISTS ${table}_protected_${action.toLowerCase()} BEFORE ${action} ON ${table} WHEN NEW.is_secret NOT IN (0, 1) OR (NEW.is_secret = 1 AND (COALESCE(NEW.real_value, '') != '' OR NEW.protected_value = '' OR NEW.write_revision = '')) OR (NEW.is_secret = 0 AND NEW.protected_value != '') BEGIN SELECT RAISE(ABORT, 'Invalid protected value storage'); END;`);
-    this.db.exec(`CREATE TRIGGER IF NOT EXISTS ${table}_prevent_demotion BEFORE UPDATE ON ${table} WHEN OLD.is_secret = 1 AND NEW.is_secret = 0 BEGIN SELECT RAISE(ABORT, 'Protected value cannot be demoted'); END;`);
+    this.db.exec(`DROP TRIGGER IF EXISTS ${table}_prevent_demotion;`);
   };
 
   public decode = (row: SecretRow): SecretRow => row.is_secret ? { ...row, real_value: this.protection.unprotect(row.protected_value || '') } : row;
@@ -53,6 +53,12 @@ export class ProtectedStorage {
       this.db.prepare('UPDATE secret_versions SET real_value = ?, is_secret = 1, protected_value = ?, write_revision = ? WHERE rowid = ?').run('', protectedRow.protected_value!, protectedRow.write_revision!, row.archive_rowid);
       relocate(row, protectedRow.write_revision!);
     }
+  };
+
+  public unprotectArchives = (key: string): void => {
+    const rows = this.text.all<SecretRow & { archive_rowid: number }>('SELECT rowid AS archive_rowid, ' + SqliteText.secretColumns + ' FROM secret_versions WHERE key = ? AND is_secret = 1', key).map(this.decode);
+    for (const row of rows) SecretRepresentations.variants(row.real_value);
+    for (const row of rows) this.db.prepare("UPDATE secret_versions SET real_value = ?, is_secret = 0, protected_value = '' WHERE rowid = ?").run(row.real_value, (row as SecretRow & { archive_rowid: number }).archive_rowid);
   };
 
   public sanitizeDiagnostics = (forms: readonly SecretRepresentation[]): void => {

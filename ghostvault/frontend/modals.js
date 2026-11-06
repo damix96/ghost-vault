@@ -17,6 +17,7 @@ export class ModalManager {
   protectedExisting = false;
   committed = false;
   review = false;
+  valueEdited = false;
 
   constructor(app, api) {
     this.app = app;
@@ -34,6 +35,7 @@ export class ModalManager {
     document.getElementById('cancelModalBtn').addEventListener('gv-activate', this.closeSecretModal);
     document.getElementById('cancelPatternModalBtn').addEventListener('gv-activate', () => this.togglePatternModal(false));
     document.getElementById('secretForm').addEventListener('submit', this.handleSaveSecret);
+    document.getElementById('secretForm').addEventListener('gv-input', event => { if (event.target.id === 'modalValInput') this.valueEdited = true; });
     document.getElementById('modalEncryptInput').addEventListener('change', () => {
       this.sensitive ||= document.getElementById('modalEncryptInput').checked;
       if (this.sensitive) this.drafts.delete(this.editingKey || '');
@@ -74,21 +76,28 @@ export class ModalManager {
     if (this.sensitive) SecretPrivacy.forget(this.app, secretKey);
     const key = document.getElementById('modalKeyInput');
     const draft = this.sensitive ? null : this.drafts.get(secretKey || '');
+    this.valueEdited = Boolean(draft && draft.value !== (secret?.realValue ?? ''));
     key.value = secret ? draft?.key ?? secret.key : SecretKeyInput.normalize(draft?.key ?? '');
     key.readonly = Boolean(secret);
     key.label = secret ? 'Имя записи' : 'Имя подстановки';
     key.description = secret ? 'Имя и подстановка сохранятся. Для смены имени используйте «Переименовать» в списке.' : EditorViews.keyDescription;
     const restored = draft && (draft.key !== (secret?.key || '') || draft.value !== (secret?.realValue || '') || draft.description !== (secret?.description || ''));
     dialog.heading = (secret ? 'Изменить переменную' : 'Добавить переменную') + (restored ? ' · черновик' : '');
-    document.getElementById('modalValInput').value = this.sensitive ? '' : draft?.value ?? secret?.realValue ?? '';
-    document.getElementById('modalValInput').label = this.sensitive ? 'Новое значение' : 'Значение';
+    const value = document.getElementById('modalValInput');
+    value.value = draft?.value ?? secret?.realValue ?? '';
+    value.label = 'Значение';
+    value.required = !secret;
+    value.placeholder = secret ? 'Без изменения' : 'db.internal.example';
     this.storageNote();
     document.getElementById('modalDescInput').value = draft?.description ?? secret?.description ?? '';
     document.getElementById('modalPreviewToken').textContent = secret?.alias || EditorValidation.keyPreview(key.value);
     document.getElementById('modalPreviewLabel').textContent = secret ? 'Текущая подстановка' : 'В запросе';
-    document.getElementById('secretSaveEffect').textContent = secret ? (secret.maskInAi ? 'Замена останется включена. ' : 'Замена останется выключена. ') + 'Имя и подстановка останутся прежними. Новые запросы используют сохранённое значение; уже начатые завершаются с прежним.' : 'Сохранение добавит и включит замену этого точного значения. Запрос к модели не выполняется.';
     Ui.error('secretFormError', '');
     document.getElementById('secretForm').querySelectorAll('gv-field').forEach(field => { field.error = ''; });
+    await value.updateComplete;
+    const control = value.querySelector('wa-textarea');
+    await control?.updateComplete;
+    control?.setCustomValidity('');
     dialog.show(document.activeElement, document.querySelector('#viewSecrets gv-page'));
   };
 
@@ -96,10 +105,7 @@ export class ModalManager {
 
   storageNote = () => {
     const checkbox = document.getElementById('modalEncryptInput');
-    checkbox.disabled = this.protectedExisting || this.pending.has('secret') || this.committed || this.review;
-    document.getElementById('secretStorageNote').textContent = this.protectedExisting
-      ? 'Значение зашифровано. Старое значение не загружается; введите новое для замены. Отключение шифрования пока не поддерживается.'
-      : checkbox.checked ? 'Значение будет зашифровано средствами операционной системы. Ввод очищается после сохранения или отмены.' : 'Значение сохраняется на этом компьютере без шифрования.';
+    checkbox.disabled = this.pending.has('secret') || this.committed || this.review;
   };
 
   togglePatternModal = show => {
@@ -167,7 +173,9 @@ export class ModalManager {
 
   handleSaveSecret = event => this.save(event, 'secret', () => {
     const payload = { key: this.editingKey ?? Ui.read('modalKeyInput'), realValue: Ui.read('modalValInput'), description: Ui.read('modalDescInput') };
-    return document.getElementById('modalEncryptInput').checked
+    const isSecret = document.getElementById('modalEncryptInput').checked;
+    if (this.editingKey) return this.api.updateSecret(this.editingKey, { isSecret, description: payload.description, ...(this.valueEdited && payload.realValue.length ? { realValue: payload.realValue } : {}) });
+    return isSecret
       ? this.api.saveProtectedSecret({ ...payload, operation: this.editingKey ? 'update' : 'create' }) : this.api.saveSecret(payload);
   }, async () => {
     await this.app.fetchData(true);

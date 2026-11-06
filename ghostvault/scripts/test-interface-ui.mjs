@@ -14,7 +14,7 @@ class InterfaceUiTests {
   edit = async key => { await this.page.evaluate(key => window.app.openModal(key), key); await this.page.locator('#secretForm').waitFor({ state: 'visible' }); };
   value = text => this.page.locator('#modalValInput textarea').fill(text);
   save = async () => {
-    const result = this.page.waitForResponse(response => response.url().endsWith('/api/vault/secret') && response.request().method() === 'POST');
+    const result = this.page.waitForResponse(response => new URL(response.url()).pathname.startsWith('/api/vault/secret') && ['POST', 'PATCH'].includes(response.request().method()));
     await this.page.locator('#secretForm gv-action[type="submit"]').click();
     const response = await result;
     assert.equal(response.status(), 200);
@@ -42,7 +42,7 @@ class InterfaceUiTests {
     await this.host.isolateClipboard(this.context);
     this.page = await this.context.newPage();
     this.page.on('pageerror', error => this.errors.push(error.message));
-    this.page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/api/vault/secret')) this.posts++; });
+    this.page.on('request', request => { if (['POST', 'PATCH'].includes(request.method()) && new URL(request.url()).pathname.startsWith('/api/vault/secret')) this.posts++; });
     await this.page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
     await this.page.goto(this.base + '/dashboard#secrets');
     await this.page.waitForFunction(() => window.app?.manualSecrets.length === 1);
@@ -60,9 +60,9 @@ class InterfaceUiTests {
     assert.equal(this.vault.getManualSecrets().find(row => row.key === 'PRIVATE').realValue, ' private-exact-123 ');
     assert.equal(await this.page.locator('#modalValInput').evaluate(node => node.value), '');
     await this.edit('PRIVATE');
-    assert.equal(await this.page.locator('#modalValInput textarea').inputValue(), '');
+    assert.equal(await this.page.locator('#modalValInput textarea').inputValue(), ' private-exact-123 ');
     assert.equal(await this.page.locator('#modalEncryptInput').isChecked(), true);
-    assert.equal(await this.page.locator('#modalEncryptInput').isDisabled(), true);
+    assert.equal(await this.page.locator('#modalEncryptInput').isDisabled(), false);
     await this.value('cancelled-private');
     await this.page.locator('#cancelModalBtn').click(); await this.closed();
     assert.equal(await this.page.locator('#modalValInput').evaluate(node => node.value), '');
@@ -108,7 +108,7 @@ class InterfaceUiTests {
     await this.edit('PRIVATE');
     await this.value('private-lost-response');
     let committed = false;
-    await this.page.route('**/api/vault/secret', async route => { const response = await route.fetch(); assert.equal(response.status(), 200); committed = true; await route.abort('failed'); }, { times: 1 });
+    await this.page.route('**/api/vault/secret/PRIVATE', async route => { const response = await route.fetch(); assert.equal(response.status(), 200); committed = true; await route.abort('failed'); }, { times: 1 });
     await this.page.locator('#secretForm gv-action[type="submit"]').click();
     await this.page.waitForFunction(() => window.app.modals.review && !window.app.modals.pending.has('secret'));
     assert.ok(committed);

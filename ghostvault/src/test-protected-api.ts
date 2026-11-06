@@ -67,7 +67,10 @@ class ProtectedApiTests {
     assert.equal(protectedUpdate.statusCode, 200);
     assert.equal(protectedUpdate.json().secret.isSecret, true);
     assert.equal(Object.hasOwn(protectedUpdate.json().secret, 'realValue'), false);
-    assert.equal((await app.inject({ method: 'POST', url: '/api/vault/secret', payload: { key: newSecret.key, realValue: 'demotion-attempt', isSecret: false } })).json().code, 'SECRET_DEMOTION_UNSUPPORTED');
+    const unprotected = await app.inject({ method: 'POST', url: '/api/vault/secret', payload: { key: newSecret.key, realValue: 'ordinary-explicit-replacement', isSecret: false } });
+    assert.equal(unprotected.statusCode, 200);
+    assert.equal(unprotected.json().secret.isSecret, false);
+    assert.equal(unprotected.json().secret.realValue, 'ordinary-explicit-replacement');
     assert.equal((await app.inject({ method: 'PATCH', url: '/api/vault/secret/PROTECTED', payload: { name: 'MIXED', isSecret: true } })).statusCode, 400);
     assert.equal((await app.inject({ url: '/api/vault' })).json().manual.find((item: { key: string }) => item.key === 'ORDINARY').realValue, 'ordinary-visible');
     const snapshot = vault.snapshot();

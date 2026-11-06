@@ -7,7 +7,7 @@ import { SecretRepresentations } from '../vault/secret-representations.js';
 const name = z.string().regex(/^[A-Z0-9_]+$/);
 const secret = z.object({ key: name, realValue: z.string().min(1).refine(SecretRepresentations.isWellFormed), description: z.string().optional(), isSecret: z.boolean().optional(), operation: z.enum(['create', 'update']).optional() });
 const rename = z.object({ name });
-const protect = z.object({ isSecret: z.literal(true) }).strict();
+const protect = z.object({ isSecret: z.boolean(), realValue: z.string().min(1).refine(SecretRepresentations.isWellFormed).optional(), description: z.string().optional() }).strict();
 const promote = z.object({ key: z.string().min(1) });
 
 export class VariableApi {
@@ -16,15 +16,16 @@ export class VariableApi {
   private success = (entry: SecretEntry) => ({ success: true, secret: this.vault.publicEntry(entry), notice: this.vault.getSecretStorageNotice() });
 
   private write = (input: z.infer<typeof secret>): SecretEntry => {
-    if (input.isSecret !== true) {
-      if (input.operation) throw Object.assign(new Error('Operation requires isSecret:true.'), { statusCode: 400, code: 'INVALID_SECRET_INPUT' });
+    if (input.isSecret === undefined || input.isSecret === false && !input.operation) {
+      if (input.operation) throw Object.assign(new Error('Operation requires an explicit encryption flag.'), { statusCode: 400, code: 'INVALID_SECRET_INPUT' });
       return this.vault.setManualSecret(input.key, input.realValue, input.description, input.isSecret);
     }
     if (!input.operation) throw Object.assign(new Error('Choose create or update.'), { statusCode: 400, code: 'INVALID_SECRET_INPUT' });
     const target = this.vault.captureProtectedTargets([input.key])[0];
     if (input.operation === 'create' && target.revision !== null) throw Object.assign(new Error('A fixed variable already exists.'), { statusCode: 409, code: 'SECRET_ALREADY_EXISTS' });
     if (input.operation === 'update' && target.revision === null) throw Object.assign(new Error('Fixed variable not found.'), { statusCode: 404, code: 'VARIABLE_NOT_FOUND' });
-    this.vault.commitProtectedSecrets({ values: [{ key: input.key, realValue: input.realValue, description: input.description }], expected: [target] });
+    if (input.isSecret) this.vault.commitProtectedSecrets({ values: [{ key: input.key, realValue: input.realValue, description: input.description }], expected: [target] });
+    else this.vault.setManualSecret(input.key, input.realValue, input.description ?? this.vault.getManualSecrets().find(entry => entry.key === input.key)?.description, false, target.revision);
     return this.vault.getManualSecrets().find(entry => entry.key === input.key)!;
   };
 
@@ -37,7 +38,7 @@ export class VariableApi {
     this.app.patch<{ Params: { key: string } }>('/api/vault/secret/:key', async (req, reply) => {
       const parsed = z.union([rename.strict(), protect]).safeParse(req.body);
       if (!parsed.success) return reply.status(400).send({ error: 'Choose one valid operation.', code: 'INVALID_SECRET_INPUT' });
-      const entry = 'name' in parsed.data ? this.vault.renameManualSecret(req.params.key, parsed.data.name) : this.vault.protectManualSecret(req.params.key);
+      const entry = 'name' in parsed.data ? this.vault.renameManualSecret(req.params.key, parsed.data.name) : this.vault.setManualProtection(req.params.key, parsed.data);
       if (!entry) return reply.status(404).send({ error: 'Fixed variable not found', code: 'VARIABLE_NOT_FOUND' });
       return this.success(entry);
     });

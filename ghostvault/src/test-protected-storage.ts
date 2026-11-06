@@ -71,7 +71,7 @@ class ProtectedStorageTests {
     const encrypted = db.getSecrets()[0];
     const inspector = new DatabaseSync(this.file);
     assert.throws(() => inspector.prepare('UPDATE secrets SET real_value = ? WHERE key = ?').run('legacy-writer-plaintext', row.key), /Invalid protected value storage/);
-    assert.throws(() => inspector.prepare("UPDATE secrets SET is_secret = 0, protected_value = '', real_value = ? WHERE key = ?").run('legacy-demotion', row.key), /Protected value cannot be demoted/);
+    assert.throws(() => inspector.prepare('UPDATE secrets SET is_secret = 0, real_value = ? WHERE key = ?').run('mixed-storage-invalid', row.key), /Invalid protected value storage/);
     inspector.prepare('UPDATE secrets SET protected_value = ? WHERE key = ?').run('{}', row.key);
     assert.throws(() => db.protectedStorage.decode(db.getSecrets()[0]), error => error instanceof SecretStorageError && error.code === 'SECRET_DECRYPTION_FAILED');
     inspector.prepare('UPDATE secrets SET protected_value = ? WHERE key = ?').run(encrypted.protected_value!, row.key);

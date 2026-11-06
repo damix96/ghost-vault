@@ -19,6 +19,16 @@
 #viewSecrets .app-secret-card h3 { font: 600 .85rem/1.7 Consolas, monospace; overflow-wrap: anywhere; }
 .app-record-meta { color: var(--gv-muted); font-size: .75rem; margin: .1rem 0 0; }
 .app-record-meta code { color: #b9c9e5; }
+.app-secret-group { min-width: 0; border-bottom: 1px solid var(--gv-border); }
+.app-secret-group:last-child { border-bottom: 0; }
+.app-secret-group > summary { padding: .7rem 1rem; min-height: 2.75rem; color: var(--gv-text); cursor: pointer; }
+.app-secret-group > summary:hover { background: var(--gv-surface); }
+.app-secret-group > summary:focus-visible { outline: 2px solid var(--gv-focus); outline-offset: -2px; }
+.app-secret-group-heading { display: inline-flex; vertical-align: top; align-items: baseline; justify-content: space-between; gap: .5rem 1rem; width: calc(100% - 1.4rem); }
+.app-secret-group-heading code { min-width: 0; overflow-wrap: anywhere; font-size: var(--gv-size-label); font-weight: 600; }
+.app-secret-group-count { flex-shrink: 0; color: var(--gv-muted); font-size: var(--gv-size-label); font-variant-numeric: tabular-nums; }
+.app-secret-group[open] > summary { border-bottom: 1px solid var(--gv-border); }
+#viewSecrets .app-secret-group > .app-secret-card { padding-inline-start: 2rem; }
 #rulesList .app-rule-actions { gap: .8rem; flex-wrap: wrap; }
 .app-record-details { margin-top: .1rem; }
 .app-record-details > summary { width: fit-content; font-size: .78rem; color: #aabfe4; cursor: pointer; padding: .2rem 0; min-height: 1.5rem; }
@@ -70,6 +80,9 @@
   #ruleEditorForm, #patternForm { gap: 1.25rem; }
 }
 @media(max-width: 620px) {
+  .app-secret-group > summary { padding-inline: .75rem; }
+  .app-secret-group-heading { flex-wrap: wrap; }
+  #viewSecrets .app-secret-group > .app-secret-card { padding-inline-start: 1.25rem; }
   .app-secret-card > header { flex-direction: column; align-items: stretch; }
   .app-secret-card > header > .app-inline-actions { justify-content: flex-start; flex-wrap: wrap; }
   .app-management-toolbar { align-items: stretch; flex-direction: column; gap: .6rem; }

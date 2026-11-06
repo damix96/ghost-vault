@@ -89,10 +89,15 @@ export class VaultStore {
     const entries = writes.map(({ key, realValue, description, isSecret }) => {
       if (this.autoSecrets.has(key)) throw new AliasConflict('Имя принадлежит автосекрету. Сначала закрепите его.');
       const current = this.manualSecrets.get(key);
-      if (current?.isSecret && isSecret === false) throw Object.assign(new Error('Removing secret protection is not supported.'), { statusCode: 409, code: 'SECRET_DEMOTION_UNSUPPORTED' });
+      if (current?.isSecret && isSecret === false) {
+        const stored = this.db.getSecrets().find(row => row.key === key);
+        if (!stored) throw Object.assign(new Error('A variable changed. Refresh before saving.'), { statusCode: 409, code: 'SECRET_WRITE_CONFLICT' });
+        this.db.protectedStorage.decode(stored);
+      }
       return { ...this.entry(key, realValue, description), storage: 'manual' as const, isSecret: isSecret ?? current?.isSecret ?? false, maskInAi: current?.maskInAi ?? true, createdAt: current?.createdAt || new Date().toISOString(), retainedVersions: this.archived.filter(version => version.key === key).length };
     });
     const protectedKeys = new Set(entries.filter(entry => entry.isSecret).map(entry => entry.key));
+    const unprotectedKeys = new Set(writes.filter(write => write.isSecret === false).map(write => write.key));
     if (entries.some(entry => entry.isSecret && Buffer.byteLength(entry.realValue, 'utf8') > 65536)) throw Object.assign(new Error('Protected value exceeds the byte limit.'), { statusCode: 400, code: 'INVALID_SECRET_INPUT' });
     const history = this.db.getVersions().filter(row => protectedKeys.has(row.key));
     const retained = [...history.flatMap(this.historicalRedactions), ...[...protectedKeys].flatMap(key => this.manualSecrets.get(key)?.representations || [])];
@@ -106,6 +111,7 @@ export class VaultStore {
         allocated.forEach(form => active.add(form.alias));
         this.persist(entry);
         if (entry.isSecret) this.db.protectedStorage.protectArchives(entry.key, this.db.archivedRepresentations.relocate);
+        if (unprotectedKeys.has(entry.key)) this.db.protectedStorage.unprotectArchives(entry.key);
         return allocated;
       });
       if (protectedKeys.size) this.db.protectedStorage.sanitizeDiagnostics([...retained, ...allocatedForms.flatMap((forms, index) => entries[index].isSecret ? forms : [])]);
@@ -117,23 +123,27 @@ export class VaultStore {
       this.manualSecrets.set(entry.key, stored);
       if (entry.isSecret) this.redactor.remember(forms[index]);
     });
-    this.archived = this.archived.map(entry => protectedKeys.has(entry.key) ? { ...entry, isSecret: true } : entry);
+    this.archived = this.archived.map(entry => protectedKeys.has(entry.key) || unprotectedKeys.has(entry.key) ? { ...entry, isSecret: protectedKeys.has(entry.key) } : entry);
     this.redactor.remember(retained);
     if (this.db.protectedStorage.cleanupPending) this.db.protectedStorage.clean();
     return entries.map(entry => this.manualSecrets.get(entry.key)!);
   };
 
-  public setManualSecret = (key: string, realValue: string, description?: string, isSecret?: boolean): SecretEntry => this.writeManual([{ key, realValue, description, isSecret }])[0];
+  public setManualSecret = (key: string, realValue: string, description?: string, isSecret?: boolean, expected?: string | null): SecretEntry => this.writeManual([{ key, realValue, description, isSecret }], () => {
+    if (expected !== undefined && this.captureProtectedTargets([key])[0].revision !== expected) throw Object.assign(new Error('A variable changed. Refresh before saving.'), { statusCode: 409, code: 'SECRET_WRITE_CONFLICT' });
+  })[0];
 
-  public protectManualSecret = (key: string): SecretEntry | null => {
+  public setManualProtection = (key: string, input: { isSecret: boolean; realValue?: string; description?: string }): SecretEntry | null => {
     const current = this.manualSecrets.get(key);
     if (!current) return null;
-    if (!current.isSecret) return this.setManualSecret(key, current.realValue, current.description, true);
-    this.db.protectedStorage.clean();
-    return current;
+    const stored = this.db.getSecrets().find(row => row.key === key);
+    if (!stored) return null;
+    const decoded = this.db.protectedStorage.decode(stored);
+    if (Boolean(current.isSecret) === input.isSecret && input.realValue === undefined && input.description === undefined && !this.db.getVersions().some(row => row.key === key && Boolean(row.is_secret) !== input.isSecret)) { this.db.protectedStorage.clean(); return current; }
+    return this.setManualSecret(key, input.realValue ?? decoded.real_value, input.description ?? decoded.description, input.isSecret, stored.write_revision || '');
   };
-
-  public publicEntry = (entry: SecretEntry): SecretPublicEntry => this.redactor.redact(SecretProjection.entry(entry));
+  public protectManualSecret = (key: string): SecretEntry | null => this.setManualProtection(key, { isSecret: true });
+  public publicEntry = (entry: SecretEntry): SecretPublicEntry => ({ ...SecretProjection.entry(entry), description: this.redactor.redact(entry.description) });
   public redactProtected = <T>(value: T): T => this.redactor.redact(value);
   public projectProtectedText = (value: string): ProtectedTextProjection => this.redactor.project(value);
   public redactProtectedPreview = (value: string): string => this.redactor.redactPreview(value);

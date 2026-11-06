@@ -61,6 +61,7 @@ export class SecretNavigation {
       const root = document.getElementById(category + 'TableBody');
       const card = [...root.querySelectorAll('[data-secret-record]')].find(node => node.dataset.secretRecord === key);
       if (!card) return;
+      if (category === 'auto') this.app.renderer.groups.reveal(card);
       clearTimeout(this.timer);
       this.highlighted?.classList.remove('app-secret-target');
       this.highlighted = card;

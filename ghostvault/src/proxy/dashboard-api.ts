@@ -18,6 +18,7 @@ import { WorkspaceApi } from './workspace-api.js';
 import { VariableApi } from './variable-api.js';
 import { InterfaceApi } from './interface-api.js';
 import { ProtectedEvents } from '../secret-input/protected-events.js';
+import { SecretProjection } from '../vault/secret-projection.js';
 
 export class DashboardApi {
   private routeRegistry: RouteRegistry;
@@ -52,7 +53,15 @@ export class DashboardApi {
 
   public registerRoutes = (): void => {
     const display = new InterfaceApi(this.app, this.vault, this.runtime, this.eventBroadcaster as ProtectedEvents);
-    this.app.addHook('preSerialization', async (request, _, payload) => request.url.split('?')[0].startsWith('/api/') && !display.original(request) ? this.vault.redactProtected(payload) : payload);
+    this.app.addHook('preSerialization', async (request, _, payload) => {
+      const route = request.routeOptions.url;
+      if (!request.url.split('?')[0].startsWith('/api/') || display.original(request)) return payload;
+      const safe = this.vault.redactProtected(payload);
+      if (route === '/api/vault' && request.method === 'GET') return SecretProjection.admin('vault', payload, safe);
+      if (route === '/api/export' && request.method === 'GET') return SecretProjection.admin('export', payload, safe);
+      if ((route === '/api/vault/secret' || route === '/api/vault/promote') && request.method === 'POST' || route === '/api/vault/secret/:key' && request.method === 'PATCH') return SecretProjection.admin('mutation', payload, safe);
+      return safe;
+    });
     display.register();
     new WorkspaceApi(this.app, this.vault.getDatabase(), this.hookManager, this.proxyConfig, this.vault, this.runtime).register();
     new VariableApi(this.app, this.vault).register();
