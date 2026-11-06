@@ -24,19 +24,19 @@ export class ResponseChangeView {
 
   restored = item => {
     const key = item.key ?? this.display.aliases.get(item.alias)?.secret.key;
-    const shown = item.value === '' ? '(пустая строка)' : item.value;
+    const shown = item.valueHidden ? 'Значение скрыто' : item.value === '' ? '(пустая строка)' : item.value;
     const keyAttribute = key === undefined ? '' : ` secret-key="${escapeHtml(key)}"`;
     const actionAttribute = key === undefined ? '' : ` data-secret-key="${escapeHtml(key)}" aria-keyshortcuts="Control+Enter"`;
-    return `<span class="app-restored-value"><gv-hint direction="inbound" label="${escapeHtml(item.alias)}" text="${escapeHtml('От модели: ' + item.alias + '\nПриложению: ' + item.value)}" copy-value="${escapeHtml(item.value)}"${keyAttribute}><span class="app-explained" role="button" tabindex="0" data-hint-only${actionAttribute}>${escapeHtml(shown)}</span></gv-hint></span>`;
+    return `<span class="app-restored-value"><gv-hint direction="inbound" label="${escapeHtml(item.alias)}" text="${escapeHtml('От модели: ' + item.alias + '\nПриложению: ' + shown)}"${item.valueHidden ? '' : ' copy-value="' + escapeHtml(item.value) + '"'}${keyAttribute}><span class="app-explained" role="button" tabindex="0" data-hint-only${actionAttribute}>${escapeHtml(shown)}</span></gv-hint></span>`;
   };
 
   fragment = group => {
     const kind = ['tool-arguments', 'protocol-snapshot'].includes(group.source) ? 'code' : 'prose';
-    const label = group.source === 'tool-arguments' ? 'Аргументы инструмента' : group.source === 'protocol-snapshot' ? 'Данные протокола' : 'Восстановлено';
+    const label = group.source === 'tool-arguments' ? 'Ассистент · вызов инструмента' : group.source === 'protocol-snapshot' ? 'Данные протокола' : 'Ассистент';
     const html = group.windows.map((window, index) => (index || window.start > 0 ? ChangeFragments.ellipsis() : '') + this.window(window)).join('');
     const last = group.windows.at(-1);
     const tail = Number.isInteger(last.totalLength) && last.start + last.text.length < last.totalLength ? ChangeFragments.ellipsis() : '';
-    return `<article class="app-change-card" data-reading-key="response.change.${escapeHtml(group.id)}" data-timeline-item tabindex="-1" data-content-kind="${kind}"><header><strong>${label}</strong></header><div class="app-change-fragment"><div class="app-change-text">${html}${tail}</div></div></article>`;
+    return `<article class="app-change-card" data-reading-key="response.change.${escapeHtml(group.id)}" data-timeline-item tabindex="-1" data-content-kind="${kind}"><header><strong>${label}</strong>${Ui.badge('Подстановки восстановлены')}</header><div class="app-change-fragment"><div class="app-change-text">${html}${tail}</div></div><button type="button" class="app-text-button" data-content-mode="full">Показать полный ответ</button></article>`;
   };
 
   window = group => {

@@ -29,13 +29,13 @@ class McpVaultTests {
     for (const original of this.originals) {
       for (const value of Object.values(VaultStore.computeVariants(original))) assert.equal(serialized.includes(value), false);
     }
-    for (const item of catalog.variables) assert.deepEqual(Object.keys(item).sort(), item.description ? ['description', 'name', 'source', 'token'] : ['name', 'source', 'token']);
+    for (const item of catalog.variables) assert.deepEqual(Object.keys(item).sort(), item.description ? ['description', 'name', 'source'] : ['name', 'source']);
     return catalog;
   };
 
   private projection = async (): Promise<void> => {
     const fixed = await this.catalog(0);
-    assert.deepEqual(fixed.variables, [{ name: 'BASE_URL', token: '$${<BASE_URL>}', description: 'Service address', source: 'fixed' }]);
+    assert.deepEqual(fixed.variables, [{ name: 'BASE_URL', description: 'Service address', source: 'fixed' }]);
     const automatic = await this.catalog(1, { includeAutomatic: true });
     assert.deepEqual(automatic.variables.map(variable => [variable.name, variable.source]), [['AUTO_URL', 'automatic'], ['BASE_URL', 'fixed']]);
     assert.notEqual(automatic.revision, fixed.revision);
@@ -51,7 +51,7 @@ class McpVaultTests {
 
   private updates = async (): Promise<void> => {
     const previous = await this.catalog(0);
-    const token = previous.variables[0].token;
+    const token = '$${<' + previous.variables[0].name + '>}';
     this.vault.setManualSecret('BASE_URL', this.originals[1], 'Service address');
     const updated = await this.catalog(1);
     assert.deepEqual(updated, previous);
@@ -59,13 +59,13 @@ class McpVaultTests {
     this.vault.setManualSecret('BASE_URL', this.originals[1], 'Updated service description');
     const described = await this.catalog(0);
     assert.notEqual(described.revision, updated.revision);
-    assert.equal(described.variables[0].token, token);
+    assert.equal('$${<' + described.variables[0].name + '>}' , token);
     this.vault.renameManualSecret('BASE_URL', 'SERVICE_URL');
     const renamed = await this.catalog(1);
     assert.notEqual(renamed.revision, described.revision);
-    assert.deepEqual(renamed.variables, [{ name: 'SERVICE_URL', token: '$${<SERVICE_URL>}', description: 'Updated service description', source: 'fixed' }]);
+    assert.deepEqual(renamed.variables, [{ name: 'SERVICE_URL', description: 'Updated service description', source: 'fixed' }]);
     assert.equal(this.vault.unmaskInboundText(token), token);
-    assert.equal(this.vault.unmaskInboundText(renamed.variables[0].token), this.originals[1]);
+    assert.equal(this.vault.unmaskInboundText('$${<' + renamed.variables[0].name + '>}'), this.originals[1]);
     this.vault.setManualSecret('ADDED', 'synthetic-new-entry', '');
     const added = await this.catalog(0);
     assert.deepEqual(added.variables.map(variable => variable.name), ['ADDED', 'SERVICE_URL']);

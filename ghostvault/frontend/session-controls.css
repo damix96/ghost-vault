@@ -26,7 +26,7 @@
 .app-chat [data-timeline-item]:focus-visible { outline: 2px solid var(--gv-focus); outline-offset: -2px; }
 .app-chat-messages { padding-bottom: .75rem; }
 .app-conversation-grid { grid-template-columns: minmax(0,1fr) 16.5rem; }
-.app-header-tools { gap: 1rem; }
+.app-header-tools { gap: 1rem; flex-wrap: wrap; min-width: 0; }
 @media(prefers-reduced-motion: reduce) { .app-interface-mode input::before { transition: none; } }
 
 .app-message-path { display: block; color: var(--gv-muted); font: var(--gv-size-metadata)/1.5 var(--gv-font-mono); margin: .25rem 0 .65rem; }

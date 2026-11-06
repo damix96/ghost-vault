@@ -9,7 +9,7 @@ export class Screens {
   };
 
   static secrets = () => {
-    const actions = '<gv-action id="openAddModalBtn" label="Добавить переменную"></gv-action><gv-action id="openProtectedCreateBtn" label="Добавить секрет" tone="primary"></gv-action>';
+    const actions = '<gv-action id="openAddModalBtn" label="Добавить переменную" tone="primary"></gv-action>';
     const tabs = '<div class="app-secret-tabs" role="tablist" aria-label="Тип секретов"><button type="button" role="tab" id="subTabManualBtn" aria-controls="manualVaultTable" aria-selected="true">Ручные <span id="manualCount">0</span></button><button type="button" role="tab" id="subTabAutoBtn" aria-controls="autoVaultTable" aria-selected="false" tabindex="-1">Найденные правилами <span id="autoCount">0</span></button></div>';
     const search = '<input id="searchInput" class="app-search" type="search" aria-label="Поиск секретов" placeholder="Найти по имени, значению или подстановке">';
     const lists = ['manual', 'auto'].map(id => `<section id="${id}VaultTable" role="tabpanel" tabindex="0" aria-labelledby="${id === 'manual' ? 'subTabManualBtn' : 'subTabAutoBtn'}"${id === 'auto' ? ' hidden' : ''}><div id="${id}TableBody" class="app-secret-list"></div></section>`).join('');

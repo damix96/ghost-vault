@@ -18,7 +18,6 @@ import { ViewPreferences } from './view-preferences.js';
 import { SecretRename } from './secret-rename.js';
 import { SecretProtection } from './secret-protection.js';
 import { SecretPrivacy } from './secret-privacy.js';
-import { ProtectedEditor } from './protected-editor.js';
 import { SecretCleanup } from './secret-cleanup.js';
 
 export class DashboardApp {
@@ -29,7 +28,6 @@ export class DashboardApp {
   modals = new ModalManager(this, this.api);
   secretRename = new SecretRename(this);
   secretProtection = new SecretProtection(this);
-  protectedEditor = new ProtectedEditor(this, payload => this.api.saveProtectedSecret(payload));
   overview = new Overview(this, this.api);
   connections = new Connections(this, this.api);
   activeMainTab = 'overview';
@@ -60,8 +58,6 @@ export class DashboardApp {
     this.modals.init();
     this.secretRename.init();
     this.secretProtection.init();
-    this.protectedEditor.init();
-    document.getElementById('openProtectedCreateBtn').addEventListener('gv-activate', () => this.protectedEditor.open());
     this.overview.init();
     this.preferences.init();
     await this.connections.init();
@@ -86,13 +82,18 @@ export class DashboardApp {
         if (focused && [field, document.body].includes(document.activeElement)) [...document.querySelectorAll('[data-pattern-toggle]')].find(node => node.dataset.patternToggle === field.dataset.patternToggle)?.focus({ preventScroll: true });
       }
     });
+    this.connectEvents();
+    this.refresh();
+    setInterval(this.refresh, 4000);
+  };
+
+  connectEvents = () => {
+    this.events?.close();
     this.events = this.api.connectEvents(event => {
       this.feed.addEvent(event);
       this.overview.handleEvent(event);
       if (event.type === 'transaction_completed') this.fetchData();
     }, () => this.overview.setLive(false), () => this.overview.setLive(true));
-    this.refresh();
-    setInterval(this.refresh, 4000);
   };
 
   bindEvents = () => {
@@ -203,7 +204,6 @@ export class DashboardApp {
     document.getElementById('manualVaultTable').hidden = this.secretsSubTab !== 'manual';
     document.getElementById('autoVaultTable').hidden = this.secretsSubTab !== 'auto';
     document.getElementById('openAddModalBtn').hidden = this.secretsSubTab !== 'manual';
-    document.getElementById('openProtectedCreateBtn').hidden = this.secretsSubTab !== 'manual';
     document.getElementById('secretRulesLink').hidden = this.secretsSubTab !== 'auto';
   };
 
@@ -241,7 +241,7 @@ export class DashboardApp {
     this.toastTimer = setTimeout(() => { toast.hidden = true; }, 3500);
   };
 
-  openModal = key => this.manualSecrets.find(secret => secret.key === key)?.isSecret ? this.protectedEditor.open(key) : this.modals.openSecretModal(key);
+  openModal = key => this.modals.openSecretModal(key);
 
   handleDeleteSecret = async key => {
     if (!await this.utilities.confirm('Удалить секрет «' + key + '»?', 'Подстановка перестанет работать в новых запросах. Уже начатые запросы завершатся с прежним значением. Включённое правило может найти значение снова.')) return;

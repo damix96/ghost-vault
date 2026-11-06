@@ -64,7 +64,7 @@ export class SecretReleaseVerifier {
     const catalog = await this.client.callTool({ name: 'ghostvault_list_variables', arguments: { names: this.names } });
     assert.equal(catalog.isError, undefined);
     assert.equal(catalog.structuredContent.variables.length, this.names.length);
-    for (const item of catalog.structuredContent.variables) assert.equal(item.token, this.token(item.name));
+    for (const item of catalog.structuredContent.variables) { assert.ok(this.names.includes(item.name)); assert.equal('token' in item, false); }
     this.hidden(catalog);
     await new SecretProxyVerifier(this).run();
     for (const route of ['/api/vault', '/api/export?group=secrets', '/api/sessions']) {

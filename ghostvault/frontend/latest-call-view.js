@@ -11,7 +11,9 @@ import { TimelineNavigation } from './timeline-navigation.js';
 export class LatestCallView {
   static render = (step, mode, vaultSecrets = [], contentMode = 'changes', session = '', preferences = {}, expanded = new Set()) => {
     if (!step) return Ui.empty('Запросов пока нет. Подключите своё приложение по инструкции и отправьте из него обычный запрос.');
-    const entries = [...new Map([...vaultSecrets, ...(step.interceptedSecrets || [])].map(secret => [secret.alias, secret])).values()];
+    const aliases = new Map(vaultSecrets.map(secret => [secret.alias, secret]));
+    for (const secret of step.interceptedSecrets || []) aliases.set(secret.alias, { ...aliases.get(secret.alias), ...secret });
+    const entries = [...aliases.values()];
     const display = new SecretDisplay(entries);
     const order = preferences.order || 'oldest';
     const advanced = preferences.mode !== 'simple';
@@ -23,11 +25,13 @@ export class LatestCallView {
     const modes = '<div class="app-view-modes" role="group" aria-label="Просмотр обмена">' + [['changes', 'Места замен'], ['full', 'Полный текст'], ['json', 'JSON']].map(([id, label]) => `<button type="button" class="${id === 'json' ? 'app-technical' : ''}" data-content-mode="${id}" aria-pressed="${selectedMode === id}">${label}</button>`).join('') + '</div>';
     const ordering = '<select id="messageOrder" aria-label="Порядок сообщений"><option value="newest"' + (order === 'newest' ? ' selected' : '') + '>Последние сверху</option><option value="oldest"' + (order === 'oldest' ? ' selected' : '') + '>Последние снизу</option></select>';
     const responseViewer = new PayloadView(display, order, false);
-    const response = step.state === 'active' ? StreamPresentation.markup() : selectedMode === 'changes' ? new ResponseChangeView(display).render(step) : selectedMode === 'json' ? viewer.json(step.response?.body) : responseViewer.render(step.response?.body, 'Ответ', 'response');
+    const savedBody = step.response?.body;
+    const responseBody = savedBody?.choices ? { choices: savedBody.choices } : savedBody?.output ? { output: savedBody.output } : savedBody?.candidates ? { candidates: savedBody.candidates } : savedBody?.content ?? savedBody;
+    const response = step.state === 'active' ? StreamPresentation.markup() : selectedMode === 'changes' ? new ResponseChangeView(display).render(step) : selectedMode === 'json' ? viewer.json(step.response?.body) : responseViewer.render(responseBody, 'Ответ', 'response');
     const responseRaw = step.state !== 'active' && selectedMode !== 'changes' && step.response ? viewer.saved(step.response, 'response', 'Сохранённый HTTP-ответ · JSON / RAW') : '';
     const toolbar = `<div class="app-chat-toolbar">${modes}${CallHeaderView.modes(mode, selectedMode)}${ordering}</div>`;
     const requestSection = `<section class="app-request-payload" data-reading-key="request.container" data-timeline-item data-reading-target-id="request" tabindex="-1"><div class="app-chat-messages"><header class="app-exchange-heading"><h3>${selectedMode !== 'changes' && mode === 'original' ? 'Запрос из приложения' : 'Запрос к модели'}</h3></header>${request}${selectedMode !== 'changes' && step.request ? viewer.saved(step.request, 'request.http', 'Сохранённый HTTP-запрос') : ''}</div></section>`;
-    const responseSection = `<section class="app-final-response" data-reading-key="response.container" data-reading-target-id="response" data-timeline-item tabindex="-1">${response}${responseRaw}</section>`;
+    const responseSection = `<section class="app-final-response" data-reading-key="response.container" data-reading-target-id="response" data-timeline-item tabindex="-1">${selectedMode === 'changes' || savedBody?.choices ? '' : '<header class="app-exchange-heading"><h3>Ассистент</h3></header>'}${response}${responseRaw}</section>`;
     return `<div class="app-latest-call">${CallHeaderView.render(step, mode, selectedMode, session)}${TimelineNavigation.render(order)}<div class="app-conversation-grid"><div class="app-chat">${toolbar}${order === 'newest' ? responseSection + requestSection : requestSection + responseSection}</div>${CallSecretsView.render(step, sent, display)}</div></div>`;
   };
 }

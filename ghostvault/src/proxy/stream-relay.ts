@@ -41,7 +41,8 @@ export class StreamRelay {
       const preview = (normalized?.content || []).filter((block: any) => block.type === 'text').map((block: any) => block.text).join('');
       let projected: string | undefined;
       try { projected = projectPreview(preview); } catch {}
-      if (projected !== undefined) this.events.broadcast({ id: identity.txId + '-progress-' + totalChunks, type: 'stream_progress', timestamp: new Date().toISOString(), client: identity.client, details: { sessionId: identity.sessionId, transactionId: identity.txId, text: projected } });
+      const event = { id: identity.txId + '-progress-' + totalChunks, type: 'stream_progress' as const, timestamp: new Date().toISOString(), client: identity.client, details: { sessionId: identity.sessionId, transactionId: identity.txId, text: preview } };
+      if (projected !== undefined) this.events.broadcast({ ...event, details: { ...event.details, text: projected } }, event);
       lastProgress = Date.now();
     };
     try {

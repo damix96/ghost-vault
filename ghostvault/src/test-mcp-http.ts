@@ -40,7 +40,7 @@ class McpHttpTests {
     assert.equal((await first.callTool({ name: 'ghostvault_list_variables' })).isError, undefined);
     const calls = await Promise.all(Array.from({ length: 24 }, (_, index) => (index % 2 ? first : second).callTool({ name: 'ghostvault_list_variables', arguments: {} })));
     assert.equal(this.calls, 25);
-    for (const result of calls) assert.deepEqual(result.structuredContent, { revision: 'one', variables: [{ name: 'BASE_URL', token: '$${<BASE_URL>}', source: 'fixed' }] });
+    for (const result of calls) assert.deepEqual(result.structuredContent, { revision: 'one', variables: [{ name: 'BASE_URL', source: 'fixed' }] });
     assert.equal(this.endpoint.getActiveRequestCount(), 0);
     for (const transport of this.transports) assert.equal(transport.sessionId, undefined);
     await first.close();

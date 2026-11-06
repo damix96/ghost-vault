@@ -48,7 +48,7 @@ class CatalogProjectionTests {
 
   private projection = async (): Promise<void> => {
     const result = await this.call();
-    const expected = { revision: 'metadata-revision', variables: [{ name: 'BASE_URL', token: '$${<BASE_URL>}', description: 'Service endpoint', source: 'fixed' }] };
+    const expected = { revision: 'metadata-revision', variables: [{ name: 'BASE_URL', description: 'Service endpoint', source: 'fixed' }] };
     assert.deepEqual(result.structuredContent, expected);
     assert.deepEqual(result.content, [{ type: 'text', text: JSON.stringify(expected) }]);
     assert.deepEqual(this.inputs.pop(), { includeAutomatic: false });
@@ -60,6 +60,7 @@ class CatalogProjectionTests {
     for (const value of [this.secret, encodeURIComponent(this.secret), Buffer.from(this.secret).toString('base64')]) assert.equal(serialized.includes(value), false);
     assert.equal(serialized.includes('traffic'), false);
     assert.equal(serialized.includes('realValue'), false);
+    assert.equal(serialized.includes('"token"'), false);
   };
 
   private failures = async (): Promise<void> => {

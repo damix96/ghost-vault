@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { catalogInputShape, catalogSchema, VaultCatalogProvider } from './catalog-schema.js';
+import { catalogInputShape, catalogSchema, catalogSourceSchema, VaultCatalogProvider } from './catalog-schema.js';
 import { VAULT_CATALOG_DESCRIPTION, VAULT_MCP_INSTRUCTIONS } from './instructions.js';
 import { McpSecretInput, SecretInputTools } from './secret-input-tools.js';
 
@@ -32,7 +32,7 @@ export class VaultCatalogServer {
 
   private listVariables = async (input: { includeAutomatic: boolean; names?: string[] }): Promise<CallToolResult> => {
     try {
-      const catalog = catalogSchema.parse(this.vault.listVariables(input));
+      const catalog = catalogSchema.parse(catalogSourceSchema.parse(this.vault.listVariables(input)));
       return { content: [{ type: 'text', text: JSON.stringify(catalog) }], structuredContent: catalog };
     } catch {
       return { isError: true, content: [{ type: 'text', text: 'Vault catalog is temporarily unavailable. Retry the catalog request.' }] };

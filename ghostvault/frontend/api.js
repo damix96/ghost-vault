@@ -1,5 +1,6 @@
 export class ApiClient {
   baseUrl = '';
+  hideEncrypted = true;
 
   constructor(baseUrl = '') {
     this.baseUrl = baseUrl;
@@ -25,13 +26,15 @@ export class ApiClient {
   };
 
   getVault = async () =>
-    this.request('/api/vault');
+    this.hideEncrypted ? this.request('/api/vault') : this.display('/api/interface/vault');
+
+  display = path => this.request(path, { method: 'POST', headers: { 'X-GhostVault-Display': 'original' }, body: '{}' });
 
   getSessions = async () =>
     this.request('/api/sessions');
 
   getSession = async id =>
-    this.request(`/api/sessions/${encodeURIComponent(id)}`).then(rows => [...rows].reverse());
+    (this.hideEncrypted ? this.request(`/api/sessions/${encodeURIComponent(id)}`) : this.display(`/api/interface/sessions/${encodeURIComponent(id)}`)).then(rows => [...rows].reverse());
 
   deleteSession = async id =>
     this.request(`/api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
@@ -124,7 +127,7 @@ export class ApiClient {
 
   connectEvents = (onEvent, onError, onOpen) => {
     try {
-      const sse = new EventSource(`${this.baseUrl}/api/events`);
+      const sse = new EventSource(`${this.baseUrl}${this.hideEncrypted ? '/api/events' : '/api/interface/events'}`);
       sse.onopen = () => onOpen?.();
       sse.onmessage = e => {
         try {

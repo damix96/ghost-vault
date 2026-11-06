@@ -18,7 +18,7 @@ export class SecretCache {
     overview.stream.ready = false;
     overview.stream.reset();
     document.getElementById('overviewSessionList').replaceChildren();
-    document.getElementById('overviewConversation').innerHTML = Ui.empty('Обновляем данные после защиты переменной…');
+    document.getElementById('overviewConversation').innerHTML = Ui.empty('Обновляем отображение данных…');
     app.feed.events = app.feed.events.map(event => ({ id: event.id, timestamp: event.timestamp, direction: event.direction, status: event.status, client: 'Событие шлюза', endpoint: '', tokens: [], originalUrl: '', replacement: '', payloadSummary: 'Содержимое этой локальной копии очищено после защиты переменной. Сохранённая история доступна на Обзоре.' }));
     app.feed.render();
     [app.ruleEditor.preview, app.modals.rulePreview].filter(Boolean).forEach(preview => {

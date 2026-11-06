@@ -114,7 +114,7 @@ export class GhostProxyServer {
   };
 
   public recordTransaction = (record: TransactionRecord): void => {
-    this.runtime.record(this.vault.redactProtected(record));
+    this.runtime.record(record);
     this.completed(record, true);
   };
 
@@ -174,11 +174,11 @@ export class GhostProxyServer {
     const started = new Date().toISOString();
     let responseEvidence = new ResponseChangeEvidence([], text => this.vault.projectProtectedText(text));
     const responseProjection = new ProtectedResponseProjection(this.vault.snapshot().diagnostics, responseEvidence);
-    const call = this.runtime.begin(this.vault.redactProtected({ id: txId, sessionId, timestamp: started, request: { method: req.method, url: incomingUrl, headers: req.headers as Record<string, string>, body: req.body, client: clientName }, interceptedSecrets: [], responseChanges: responseEvidence.snapshot() }), responseProjection);
+    const call = this.runtime.begin({ id: txId, sessionId, timestamp: started, request: { method: req.method, url: incomingUrl, headers: req.headers as Record<string, string>, body: req.body, client: clientName }, interceptedSecrets: [], responseChanges: responseEvidence.snapshot() }, responseProjection);
     const retain = call.current;
     let lastRecord: TransactionRecord | undefined;
     const record = (transaction: TransactionRecord): void => {
-      lastRecord = responseProjection.project({ ...transaction, responseChanges: responseEvidence.snapshot(), timestamp: started, request: { ...transaction.request, url: incomingUrl } });
+      lastRecord = { ...transaction, responseChanges: responseEvidence.snapshot(), timestamp: started, request: { ...transaction.request, url: incomingUrl } };
       call.update(lastRecord);
     };
     this.eventBroadcaster.broadcast({ id: txId + '-start', type: 'request_started', timestamp: new Date().toISOString(), client: clientName, details: { sessionId, transactionId: txId, endpoint: req.url } });

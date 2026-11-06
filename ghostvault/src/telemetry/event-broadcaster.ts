@@ -26,7 +26,7 @@ export class EventBroadcaster {
     });
   };
 
-  public broadcast = (event: AuditEvent): void => {
+  public broadcast = (event: AuditEvent, original?: AuditEvent): void => {
     const payload = 'data: ' + JSON.stringify(event) + '\n\n';
     for (const sub of this.subscribers) sub(payload);
   };

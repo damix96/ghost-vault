@@ -17,6 +17,8 @@ Paths in this table are relative to `ghostvault/`. Ownership is assigned for thi
 
 ## Catalog and mutable variables
 
+2026-11-07 user correction: the public MCP projection now omits redundant `token`; it returns `{name,description?,source}`. Static instructions construct `$${<NAME>}` from the returned name. The internal `VaultStore.listVariables` contract below retains token for compatibility. [Current interface/catalog contract](interface-privacy.md) supersedes only the public projection wording below.
+
 Agreed by vault_backend and mcp_protocol, reported under `record-mcp-catalog-contract` (2026-11-04): `VaultStore.listVariables(input?: { includeAutomatic?: boolean; names?: string[] }): { revision: string; variables: Array<{name: string; token: string; description?: string; source: 'fixed' | 'automatic'}> }`. Public Vault types: `src/vault/variable-catalog.ts` (`CatalogInput`, `CatalogVariable`, `VariableCatalogResult`). Public MCP adapter contract: `src/mcp/catalog-schema.ts` (`VaultCatalogProvider`, input/output schemas). Paths are relative to `ghostvault/`. Additional backend confirmation: `catalog-contract-record` (2026-11-04).
 
 | Aspect | Agreed behavior |

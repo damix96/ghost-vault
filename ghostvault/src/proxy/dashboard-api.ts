@@ -16,6 +16,8 @@ import { DashboardDemo } from './dashboard-demo.js';
 import { SessionDialogue } from './session-dialogue.js';
 import { WorkspaceApi } from './workspace-api.js';
 import { VariableApi } from './variable-api.js';
+import { InterfaceApi } from './interface-api.js';
+import { ProtectedEvents } from '../secret-input/protected-events.js';
 
 export class DashboardApi {
   private routeRegistry: RouteRegistry;
@@ -49,7 +51,9 @@ export class DashboardApi {
   private autoSecrets = () => this.vault.getAutoSecrets().map(this.vault.publicEntry);
 
   public registerRoutes = (): void => {
-    this.app.addHook('preSerialization', async (request, _, payload) => request.url.split('?')[0].startsWith('/api/') ? this.vault.redactProtected(payload) : payload);
+    const display = new InterfaceApi(this.app, this.vault, this.runtime, this.eventBroadcaster as ProtectedEvents);
+    this.app.addHook('preSerialization', async (request, _, payload) => request.url.split('?')[0].startsWith('/api/') && !display.original(request) ? this.vault.redactProtected(payload) : payload);
+    display.register();
     new WorkspaceApi(this.app, this.vault.getDatabase(), this.hookManager, this.proxyConfig, this.vault, this.runtime).register();
     new VariableApi(this.app, this.vault).register();
     this.app.get('/dashboard', async (_, reply: FastifyReply) => reply.sendFile('index.html'));

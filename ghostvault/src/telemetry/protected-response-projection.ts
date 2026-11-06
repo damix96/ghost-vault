@@ -25,6 +25,7 @@ export class ProtectedResponseProjection {
     try { return this.diagnostics.preview(text); }
     catch { return undefined; }
   };
+  public original = (record: TransactionRecord): TransactionRecord => ({ ...record, responseChanges: this.evidence.original() });
 
   private body = (body: unknown, pending: boolean) => {
     const normalized = ResponseNormalizer.normalize(body);
@@ -44,7 +45,7 @@ export class ProtectedResponseProjection {
         response: record.response ? { ...record.response, body: response?.body ?? record.response.body } : undefined,
         sampleStreamChunk: response?.protected ? ProtectedResponseProjection.omitted : record.sampleStreamChunk,
       });
-      return { ...projected, responseChanges: this.evidence.snapshot() };
+      return { ...projected, interceptedSecrets: projected.interceptedSecrets.map((entry, index) => ({ ...entry, ...(entry.realValue !== record.interceptedSecrets[index]?.realValue ? { valueHidden: true } : {}) })), responseChanges: this.evidence.snapshot() };
     } catch {
       return { id: record.id, sessionId: record.sessionId, timestamp: record.timestamp, state: record.state,
         request: { method: '', url: '', headers: {}, body: ProtectedResponseProjection.unavailable, client: '' }, interceptedSecrets: [],

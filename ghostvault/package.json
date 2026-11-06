@@ -34,6 +34,7 @@
     "test:composite": "node scripts/run-tests.mjs test-composite-replacements",
     "test:admin": "node scripts/run-tests.mjs test-admin-regressions",
     "test:response-evidence": "node scripts/run-tests.mjs test-response-change-evidence test-protected-response-evidence",
+    "test:interface": "node scripts/run-tests.mjs test-interface-display && node scripts/test-interface-ui.mjs",
     "test:e2e": "node dist/e2e-runner.js",
     "mcp": "node dist/mcp/index.js",
     "mcp:bridge": "node dist/runtime/cli.js mcp-bridge",

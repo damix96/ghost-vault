@@ -5,13 +5,13 @@ export class SecretDisplay {
   aliases = new Map();
 
   constructor(secrets = []) {
-    for (const secret of secrets) if (secret.alias && typeof secret.realValue === 'string') this.aliases.set(secret.alias, { secret, value: secret.realValue, format: 'Обычный текст' });
+    for (const secret of secrets) if (secret.alias && (typeof secret.realValue === 'string' || secret.isSecret)) this.aliases.set(secret.alias, { secret, value: secret.realValue, hidden: Boolean(secret.valueHidden || secret.isSecret && secret.realValue === undefined), format: 'Обычный текст' });
     for (const secret of secrets) {
       if (!secret.alias || typeof secret.realValue !== 'string') continue;
       for (const representation of secret.representations || []) {
         const { alias, value } = representation;
         if (typeof alias !== 'string' || typeof value !== 'string') continue;
-        if (!this.aliases.has(alias)) this.aliases.set(alias, { secret, value, format: value === secret.realValue ? 'Обычный текст' : 'Сохранённое представление' });
+        if (!this.aliases.has(alias)) this.aliases.set(alias, { secret, value, hidden: Boolean(secret.valueHidden), format: value === secret.realValue ? 'Обычный текст' : 'Сохранённое представление' });
       }
     }
   }
@@ -25,8 +25,8 @@ export class SecretDisplay {
     for (const token of value.matchAll(this.matcher())) {
       html += escapeHtml(value.slice(offset, token.index));
       const entry = this.aliases.get(token[0]);
-      const hint = entry ? 'Было' + (entry.format === 'Обычный текст' ? '' : ' · ' + entry.format) + ': ' + (entry.value === '' ? '(пустая строка)' : entry.value) + '\nУшло: ' + token[0] : 'Нет известного соответствия. Это может быть буквальный текст в форме подстановки, а не обработанный секрет.';
-      const tokenHtml = Ui.explain(token[0], hint, entry?.value, entry?.secret.key);
+      const hint = entry ? 'Значение' + (entry.format === 'Обычный текст' ? '' : ' · ' + entry.format) + ': ' + (entry.hidden ? 'скрыто настройкой интерфейса' : entry.value === '' ? '(пустая строка)' : entry.value) + '\nШаблон: ' + token[0] : 'Нет известного соответствия. Это может быть буквальный текст в форме подстановки, а не обработанный секрет.';
+      const tokenHtml = Ui.explain(token[0], hint, entry?.hidden ? undefined : entry?.value, entry?.secret.key);
       html += entry ? tokenHtml : '<span class="app-unknown-alias">' + tokenHtml + '</span>';
       offset = token.index + token[0].length;
     }

@@ -15,6 +15,7 @@ export interface ResponseChange {
   alias: string;
   value: string;
   key?: string;
+  valueHidden?: boolean;
   before: { text: string; start: number; end: number; contextStart: number; totalLength: number };
   after: { text: string; start: number; end: number; contextStart: number; totalLength: number };
 }
@@ -51,6 +52,14 @@ export class ResponseChangeEvidence {
     return { ...this.state, items };
   };
   public retainedBytes = (): number => this.bytes;
+  public original = (): ResponseChanges => {
+    const items: ResponseChange[] = [];
+    for (const { before, after, matches, source, fieldId } of this.captures) for (const match of matches) {
+      if (match.alias === match.value) continue;
+      items.push({ id: 'restore-' + (items.length + 1), fieldId, source, alias: match.alias, value: match.value, key: this.keys.get(match.alias), before: this.fragment(before, match.start, match.end), after: this.fragment(after, match.outputStart, match.outputStart + match.value.length) });
+    }
+    return { ...this.state, items };
+  };
   public finish = (status: ResponseChanges['status']): void => { if (this.state.status !== 'interrupted' || status !== 'complete') this.state.status = status; };
   public hookChanged = (): void => { this.state.postHookModified = true; };
 
@@ -136,7 +145,8 @@ export class ResponseChangeEvidence {
         if (match.alias === match.value) continue;
         const beforeContext = this.projectedFragment(beforeStages, match.start, match.end);
         const afterContext = this.projectedFragment(afterStages, match.outputStart, match.outputStart + match.value.length);
-        items.push({ id: 'restore-' + (items.length + 1), fieldId, source, alias: match.alias, value: afterContext.text.slice(afterContext.start, afterContext.end), key: this.keys.get(match.alias), before: beforeContext, after: afterContext });
+        const value = afterContext.text.slice(afterContext.start, afterContext.end);
+        items.push({ id: 'restore-' + (items.length + 1), fieldId, source, alias: match.alias, value, ...(value !== match.value ? { valueHidden: true } : {}), key: this.keys.get(match.alias), before: beforeContext, after: afterContext });
       }
     } catch {}
   };

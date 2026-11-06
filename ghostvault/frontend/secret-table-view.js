@@ -3,7 +3,7 @@ import { RelativeTime } from './relative-time.js';
 import { Ui } from './ui-components.js';
 
 export class SecretTableView {
-  static value = secret => secret.isSecret ? '<div class="app-vault-value"><header><span>Секретное значение</span></header><p class="app-help">Защищено. Для изменения введите новое значение.</p></div>' : SecretTableView.field('Реальное значение', secret.realValue, 'Копировать исходное значение ' + secret.key);
+  static value = secret => secret.isSecret && secret.realValue === undefined ? '<div class="app-vault-value"><header><span>Зашифрованное значение</span></header><p class="app-help">Значение скрыто настройкой интерфейса.</p></div>' : SecretTableView.field('Реальное значение', secret.realValue, 'Копировать исходное значение ' + secret.key);
   static alias = secret => SecretTableView.field('Подстановка', secret.alias, 'Копировать подстановку ' + secret.key);
   static field = (label, value, action) => `<div class="app-vault-value"><header><span>${label}</span></header><div class="app-value-content"><pre>${value === undefined ? 'Значение не сохранено' : value === '' ? 'Пустая строка' : escapeHtml(value)}</pre>${value === undefined ? '' : Ui.copy(value, action, true)}</div></div>`;
   static cell = (label, html) => `<td data-label="${escapeHtml(label)}">${html}</td>`;

@@ -7,6 +7,7 @@ interface RuntimeSession {
   activity: number;
   activeCalls: number;
   record: TransactionRecord;
+  original: TransactionRecord;
   bytes: number;
   projection?: RuntimeProjection;
   projectionBytes?: number;
@@ -14,6 +15,7 @@ interface RuntimeSession {
 
 export interface RuntimeProjection {
   project: (record: TransactionRecord) => TransactionRecord;
+  original?: (record: TransactionRecord) => TransactionRecord;
   retainedBytes: () => number;
 }
 
@@ -48,7 +50,8 @@ export class RuntimeSessions {
   private measure = (session: RuntimeSession, projectionBytes = this.overhead(session)): void => {
     this.bytes -= session.bytes;
     session.projectionBytes = projectionBytes;
-    session.bytes = Buffer.byteLength(JSON.stringify({ id: session.id, firstSeen: session.firstSeen, lastSeen: session.lastSeen, activeCalls: session.activeCalls, record: session.record }), 'utf8') + projectionBytes;
+    if (JSON.stringify(session.original) === JSON.stringify(session.record)) session.original = session.record;
+    session.bytes = Buffer.byteLength(JSON.stringify({ id: session.id, firstSeen: session.firstSeen, lastSeen: session.lastSeen, activeCalls: session.activeCalls, record: session.record, ...(session.original !== session.record ? { original: session.original } : {}) }), 'utf8') + projectionBytes;
     this.bytes += session.bytes;
     this.revision++;
   };
@@ -62,7 +65,7 @@ export class RuntimeSessions {
 
   public refreshProtection = (): void => {
     for (const session of this.sessions.values()) {
-      const record = this.projected(session, session.record);
+      const record = this.projected(session, session.original);
       const changed = record !== session.record && JSON.stringify(record) !== JSON.stringify(session.record);
       const projectionBytes = this.overhead(session);
       if (!changed && projectionBytes === session.projectionBytes) continue;
@@ -94,11 +97,12 @@ export class RuntimeSessions {
   public begin = (input: TransactionRecord, projection?: RuntimeProjection): RuntimeCall => {
     const id = input.sessionId || input.id;
     const now = this.clock();
-    const session = this.sessions.get(id) || { id, firstSeen: now, lastSeen: now, activity: 0, activeCalls: 0, record: input, bytes: 0 };
+    const session = this.sessions.get(id) || { id, firstSeen: now, lastSeen: now, activity: 0, activeCalls: 0, record: input, original: input, bytes: 0 };
     session.activeCalls++;
     session.projection = projection;
     this.sourceRevision++;
-    session.record = this.freeze(this.projected(session, structuredClone({ ...input, sessionId: id, state: 'active' as const })));
+    session.original = this.freeze(structuredClone({ ...input, sessionId: id, state: 'active' as const }));
+    session.record = this.freeze(this.projected(session, session.original));
     this.sessions.set(id, session);
     this.touch(session);
     this.measure(session);
@@ -110,7 +114,8 @@ export class RuntimeSessions {
       current,
       update: record => {
         if (!current()) return false;
-        const projected = this.projected(session, structuredClone({ ...record, sessionId: id, state: 'active' as const }));
+        session.original = this.freeze(structuredClone({ ...record, sessionId: id, state: 'active' as const }));
+        const projected = this.projected(session, session.original);
         if (JSON.stringify(projected.request.body) !== JSON.stringify(session.record.request.body) || projected.request.url !== session.record.request.url || projected.request.client !== session.record.request.client) this.sourceRevision++;
         session.record = this.freeze(projected);
         this.touch(session);
@@ -122,7 +127,7 @@ export class RuntimeSessions {
         if (ended) return;
         if (present()) {
           session.activeCalls--;
-          if (session.record.id === input.id) session.record = Object.freeze({ ...session.record, state: 'complete' });
+          if (session.record.id === input.id) { session.record = Object.freeze({ ...session.record, state: 'complete' }); session.original = Object.freeze({ ...session.original, state: 'complete' }); }
           this.touch(session);
           this.measure(session);
           this.evict();
@@ -138,6 +143,10 @@ export class RuntimeSessions {
   public records = (): TransactionRecord[] => { this.refreshProtection(); return [...this.sessions.values()].sort((a, b) => b.activity - a.activity).map(session => session.record); };
   public find = (id: string): TransactionRecord | undefined => this.records().find(record => record.id === id);
   public bySession = (id: string): TransactionRecord[] => { this.refreshProtection(); return this.sessions.has(id) ? [this.sessions.get(id)!.record] : []; };
+  public display = (id: string): TransactionRecord[] => {
+    const session = this.sessions.get(id);
+    return session ? [structuredClone(session.projection?.original?.(session.original) ?? session.original)] : [];
+  };
   public hasRoute = (prefix: string): boolean => this.records().some(record => record.request.url.split('?')[0] === '/' + prefix || record.request.url.startsWith('/' + prefix + '/'));
   public list = () => { this.refreshProtection(); return [...this.sessions.values()].sort((a, b) => b.activity - a.activity).map(session => ({ id: session.id, name: session.id, client: session.record.request.client, firstSeen: session.firstSeen, lastSeen: session.lastSeen, timestamp: session.lastSeen, endpoints: [session.record.request.url], txCount: 1, stepsCount: 1, activeCalls: session.activeCalls, latestTransactionId: session.record.id, state: session.record.state })); };
 

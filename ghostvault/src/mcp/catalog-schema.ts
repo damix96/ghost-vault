@@ -9,12 +9,15 @@ export const catalogSchema = z.object({
   revision: z.string(),
   variables: z.array(z.object({
     name: z.string().regex(/^[A-Z0-9_]+$/),
-    token: z.string().regex(/^\$\$\{<[A-Z0-9_]+>\}$/),
     description: z.string().optional(),
     source: z.enum(['fixed', 'automatic']),
   })),
 });
 
+export const catalogSourceSchema = catalogSchema.extend({
+  variables: z.array(catalogSchema.shape.variables.element.extend({ token: z.string().regex(/^\$\$\{<[A-Z0-9_]+>\}$/) })),
+});
+
 export interface VaultCatalogProvider {
-  listVariables: (input?: { includeAutomatic?: boolean; names?: string[] }) => z.output<typeof catalogSchema>;
+  listVariables: (input?: { includeAutomatic?: boolean; names?: string[] }) => z.output<typeof catalogSourceSchema>;
 }

@@ -14,8 +14,9 @@
       <gv-action id="navRulesBtn" label="Правила"></gv-action>
       <gv-action id="navSecretsBtn" label="Секреты"></gv-action>
     </nav>
-    <div class="app-header-tools"><span id="gatewayStatus" role="status" hidden></span><label class="app-interface-mode"><span>Простой</span><input id="interfaceMode" type="checkbox" role="switch" aria-label="Расширенный интерфейс"><span>Расширенный</span></label><gv-action id="exportAllBtn" label="Экспорт" size="compact"></gv-action></div>
+    <div class="app-header-tools"><span id="gatewayStatus" role="status" hidden></span><label class="app-interface-mode"><span>Простой</span><input id="interfaceMode" type="checkbox" role="switch" aria-label="Расширенный интерфейс"><span>Расширенный</span></label><gv-action id="interfaceSettingsBtn" label="Настройки" size="compact"></gv-action><gv-action id="exportAllBtn" label="Экспорт" size="compact"></gv-action></div>
   </header>
+  <gv-dialog id="interfaceSettings" heading="Настройки интерфейса"><label class="app-switch"><input id="hideEncrypted" type="checkbox"><span>Скрывать зашифрованные данные в интерфейсе</span></label><p class="app-help">Скрываются только значения зашифрованных переменных. Обычные переменные и остальной текст остаются видны. Шифрование на диске и подстановки для модели не меняются.</p></gv-dialog>
   <div id="startupError" role="alert" hidden></div>
   <main class="app-content">
     <div id="viewOverview"></div>
